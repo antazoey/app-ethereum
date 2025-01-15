@@ -7,7 +7,6 @@
 #include "mem_utils.h"
 #include "type_hash.h"
 #include "shared_context.h"
-#include "ethUtils.h"  // KECCAK256_HASH_BYTESIZE
 #include "format_hash_field_type.h"
 #include "hash_bytes.h"
 #include "apdu_constants.h"  // APDU response codes
@@ -52,7 +51,7 @@ static bool encode_and_hash_type(const void *const struct_ptr) {
     struct_name = get_struct_name(struct_ptr, &struct_name_length);
     hash_nbytes((uint8_t *) struct_name, struct_name_length, (cx_hash_t *) &global_sha3);
 
-    // opening struct parenthese
+    // opening struct parentheses
     hash_byte('(', (cx_hash_t *) &global_sha3);
 
     field_ptr = get_struct_fields_array(struct_ptr, &fields_count);
@@ -68,7 +67,7 @@ static bool encode_and_hash_type(const void *const struct_ptr) {
 
         field_ptr = get_next_struct_field(field_ptr);
     }
-    // closing struct parenthese
+    // closing struct parentheses
     hash_byte(')', (cx_hash_t *) &global_sha3);
 
     return true;
@@ -108,7 +107,7 @@ static void sort_dependencies(uint8_t deps_count, const void **deps) {
 /**
  * Find all the dependencies from a given structure
  *
- * @param[out] deps_count count of how many struct dependencie pointers
+ * @param[out] deps_count count of how many struct dependency pointers
  * @param[in] first_dep pointer to the first dependency pointer
  * @param[in] struct_ptr pointer to the struct we are getting the dependencies of
  * @return pointer to the first found dependency, \ref NULL otherwise
@@ -130,7 +129,12 @@ static const void **get_struct_dependencies(uint8_t *const deps_count,
             // get struct name
             arg_structname = get_struct_field_typename(field_ptr, &arg_structname_length);
             // from its name, get the pointer to its definition
-            arg_struct_ptr = get_structn(arg_structname, arg_structname_length);
+            if ((arg_struct_ptr = get_structn(arg_structname, arg_structname_length)) == NULL) {
+                PRINTF("Error: could not find EIP-712 dependency struct \"");
+                for (int i = 0; i < arg_structname_length; ++i) PRINTF("%c", arg_structname[i]);
+                PRINTF("\" during type_hash\n");
+                return NULL;
+            }
 
             // check if it is not already present in the dependencies array
             for (dep_idx = 0; dep_idx < *deps_count; ++dep_idx) {
@@ -168,12 +172,19 @@ static const void **get_struct_dependencies(uint8_t *const deps_count,
  * @return whether the type_hash was successful or not
  */
 bool type_hash(const char *const struct_name, const uint8_t struct_name_length, uint8_t *hash_buf) {
-    const void *const struct_ptr = get_structn(struct_name, struct_name_length);
+    const void *struct_ptr;
     uint8_t deps_count = 0;
     const void **deps;
     void *mem_loc_bak = mem_alloc(0);
+    cx_err_t error = CX_INTERNAL_ERROR;
 
-    cx_keccak_init(&global_sha3, 256);  // init hash
+    if ((struct_ptr = get_structn(struct_name, struct_name_length)) == NULL) {
+        PRINTF("Error: could not find EIP-712 struct \"");
+        for (int i = 0; i < struct_name_length; ++i) PRINTF("%c", struct_name[i]);
+        PRINTF("\" for type_hash\n");
+        return false;
+    }
+    CX_CHECK(cx_keccak_init_no_throw(&global_sha3, 256));
     deps = get_struct_dependencies(&deps_count, NULL, struct_ptr);
     if ((deps_count > 0) && (deps == NULL)) {
         return false;
@@ -192,8 +203,15 @@ bool type_hash(const char *const struct_name, const uint8_t struct_name_length, 
     mem_dealloc(mem_alloc(0) - mem_loc_bak);
 
     // copy hash into memory
-    cx_hash((cx_hash_t *) &global_sha3, CX_LAST, NULL, 0, hash_buf, KECCAK256_HASH_BYTESIZE);
+    CX_CHECK(cx_hash_no_throw((cx_hash_t *) &global_sha3,
+                              CX_LAST,
+                              NULL,
+                              0,
+                              hash_buf,
+                              KECCAK256_HASH_BYTESIZE));
     return true;
+end:
+    return false;
 }
 
 #endif  // HAVE_EIP712_FULL_SUPPORT

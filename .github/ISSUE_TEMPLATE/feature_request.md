@@ -1,6 +1,6 @@
 ---
 name: Feature report
-about: Suggest an idea for this project 
+about: Suggest an idea for this project
 title: 'Add [Subject of the issue]'
 labels: 'enhancement'
 assignees: ''
@@ -15,4 +15,4 @@ Describe your issue in as much detail as possible here.
 
 * OS and version
 * branch that causes this issue
-* Device (Nano S, Nano X, Ledger Blue)
+* Device (Nano S, Nano S Plus, Nano X, Ledger Blue)

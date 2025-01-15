@@ -8,35 +8,35 @@
 #include "commands_712.h"
 #include "type_hash.h"
 #include "shared_context.h"
-#include "ethUtils.h"
 #include "mem_utils.h"
-#include "ui_logic.h"
 #include "apdu_constants.h"  // APDU response codes
 #include "typed_data.h"
 
 static s_path *path_struct = NULL;
+static s_path *path_backup = NULL;
 
 /**
- * Get the field pointer to by the first N depths of the path.
+ * Get the field pointer to by the first N depths of the given path
  *
+ * @param[in] path given path struct
  * @param[out] fields_count_ptr the number of fields in the last evaluated depth
  * @param[in] n the number of depths to evaluate
  * @return the field which the first Nth depths points to
  */
-static const void *get_nth_field(uint8_t *const fields_count_ptr, uint8_t n) {
+static const void *get_nth_field_from(const s_path *path, uint8_t *fields_count_ptr, uint8_t n) {
     const void *struct_ptr = NULL;
     const void *field_ptr = NULL;
     const char *typename;
     uint8_t length;
     uint8_t fields_count;
 
-    if (path_struct == NULL) {
+    if (path == NULL) {
         return NULL;
     }
 
-    struct_ptr = path_struct->root_struct;
+    struct_ptr = path->root_struct;
 
-    if (n > path_struct->depth_count)  // sanity check
+    if (n > path->depth_count)  // sanity check
     {
         return NULL;
     }
@@ -47,11 +47,11 @@ static const void *get_nth_field(uint8_t *const fields_count_ptr, uint8_t n) {
             *fields_count_ptr = fields_count;
         }
         // check if the index at this depth makes sense
-        if (path_struct->depths[depth] > fields_count) {
+        if (path->depths[depth] > fields_count) {
             return NULL;
         }
 
-        for (uint8_t index = 0; index < path_struct->depths[depth]; ++index) {
+        for (uint8_t index = 0; index < path->depths[depth]; ++index) {
             field_ptr = get_next_struct_field(field_ptr);
         }
         if (struct_field_type(field_ptr) == TYPE_CUSTOM) {
@@ -62,6 +62,10 @@ static const void *get_nth_field(uint8_t *const fields_count_ptr, uint8_t n) {
         }
     }
     return field_ptr;
+}
+
+static const void *get_nth_field(uint8_t *fields_count_ptr, uint8_t n) {
+    return get_nth_field_from(path_struct, fields_count_ptr, n);
 }
 
 /**
@@ -82,6 +86,10 @@ static inline const void *get_field(uint8_t *const fields_count) {
  */
 const void *path_get_nth_field(uint8_t n) {
     return get_nth_field(NULL, n);
+}
+
+const void *path_backup_get_nth_field(uint8_t n) {
+    return get_nth_field_from(path_backup, NULL, n);
 }
 
 /**
@@ -116,7 +124,7 @@ const void *path_get_field(void) {
 /**
  * Go down (add) a depth level.
  *
- * @return whether the push was succesful
+ * @return whether the push was successful
  */
 static bool path_depth_list_push(void) {
     if (path_struct == NULL) {
@@ -143,14 +151,22 @@ static cx_sha3_t *get_last_hash_ctx(void) {
  * Finalize the last hashing context
  *
  * @param[out] hash pointer to buffer where the hash will be stored
+ * @return whether there was anything hashed at this depth
  */
-static void finalize_hash_depth(uint8_t *hash) {
+static bool finalize_hash_depth(uint8_t *hash) {
     const cx_sha3_t *hash_ctx;
+    size_t hashed_bytes;
+    cx_err_t error = CX_INTERNAL_ERROR;
 
     hash_ctx = get_last_hash_ctx();
+    hashed_bytes = hash_ctx->blen;
     // finalize hash
-    cx_hash((cx_hash_t *) hash_ctx, CX_LAST, NULL, 0, hash, KECCAK256_HASH_BYTESIZE);
+    CX_CHECK(
+        cx_hash_no_throw((cx_hash_t *) hash_ctx, CX_LAST, NULL, 0, hash, KECCAK256_HASH_BYTESIZE));
     mem_dealloc(sizeof(*hash_ctx));  // remove hash context
+    return hashed_bytes > 0;
+end:
+    return false;
 }
 
 /**
@@ -158,12 +174,16 @@ static void finalize_hash_depth(uint8_t *hash) {
  *
  * @param[in] hash pointer to given hash
  */
-static void feed_last_hash_depth(const uint8_t *const hash) {
+static bool feed_last_hash_depth(const uint8_t *const hash) {
     const cx_sha3_t *hash_ctx;
 
     hash_ctx = get_last_hash_ctx();
     // continue progressive hash with the array hash
-    cx_hash((cx_hash_t *) hash_ctx, 0, hash, KECCAK256_HASH_BYTESIZE, NULL, 0);
+    if (cx_hash_no_throw((cx_hash_t *) hash_ctx, 0, hash, KECCAK256_HASH_BYTESIZE, NULL, 0) !=
+        CX_OK) {
+        return false;
+    }
+    return true;
 }
 
 /**
@@ -174,15 +194,18 @@ static void feed_last_hash_depth(const uint8_t *const hash) {
  */
 static bool push_new_hash_depth(bool init) {
     cx_sha3_t *hash_ctx;
+    cx_err_t error = CX_INTERNAL_ERROR;
 
     // allocate new hash context
     if ((hash_ctx = MEM_ALLOC_AND_ALIGN_TYPE(*hash_ctx)) == NULL) {
         return false;
     }
     if (init) {
-        cx_keccak_init(hash_ctx, 256);  // initialize it
+        CX_CHECK(cx_keccak_init_no_throw(hash_ctx, 256));
     }
     return true;
+end:
+    return false;
 }
 
 /**
@@ -192,6 +215,7 @@ static bool push_new_hash_depth(bool init) {
  */
 static bool path_depth_list_pop(void) {
     uint8_t hash[KECCAK256_HASH_BYTESIZE];
+    bool to_feed;
 
     if (path_struct == NULL) {
         return false;
@@ -201,9 +225,13 @@ static bool path_depth_list_pop(void) {
     }
     path_struct->depth_count -= 1;
 
-    finalize_hash_depth(hash);
+    to_feed = finalize_hash_depth(hash);
     if (path_struct->depth_count > 0) {
-        feed_last_hash_depth(hash);
+        if (to_feed) {
+            if (feed_last_hash_depth(hash) == false) {
+                return false;
+            }
+        }
     } else {
         switch (path_struct->root_type) {
             case ROOT_DOMAIN:
@@ -242,6 +270,7 @@ static bool array_depth_list_push(uint8_t path_idx, uint8_t size) {
     arr = &path_struct->array_depths[path_struct->array_depth_count];
     arr->path_index = path_idx;
     arr->size = size;
+    arr->index = 0;
     path_struct->array_depth_count += 1;
     return true;
 }
@@ -261,8 +290,10 @@ static bool array_depth_list_pop(void) {
         return false;
     }
 
-    finalize_hash_depth(hash);
-    feed_last_hash_depth(hash);
+    finalize_hash_depth(hash);  // return value not checked on purpose
+    if (feed_last_hash_depth(hash) == false) {
+        return false;
+    }
 
     path_struct->array_depth_count -= 1;
     return true;
@@ -272,11 +303,15 @@ static bool array_depth_list_pop(void) {
  * Updates the path so that it doesn't point to a struct-type field, but rather
  * only to actual fields.
  *
+ * @param[in] skip_if_array skip if path is already pointing at an array
+ * @param[in] stop_at_array stop at the first downstream array
+ * @param[in] do_typehash if a typehash needs to be done when a new struct is encountered
  * @return whether the path update worked or not
  */
-static bool path_update(void) {
+static bool path_update(bool skip_if_array, bool stop_at_array, bool do_typehash) {
     uint8_t fields_count;
     const void *struct_ptr;
+    const void *starting_field_ptr;
     const void *field_ptr;
     const char *typename;
     uint8_t typename_len;
@@ -285,11 +320,20 @@ static bool path_update(void) {
     if (path_struct == NULL) {
         return false;
     }
-    if ((field_ptr = get_field(NULL)) == NULL) {
+    if ((starting_field_ptr = get_field(NULL)) == NULL) {
         return false;
     }
-    struct_ptr = path_struct->root_struct;
+    field_ptr = starting_field_ptr;
     while (struct_field_type(field_ptr) == TYPE_CUSTOM) {
+        // check if we meet one of the given conditions
+        if (((field_ptr == starting_field_ptr) && skip_if_array) ||
+            ((field_ptr != starting_field_ptr) && stop_at_array)) {
+            // only if it is the first iteration of that array depth
+            if ((path_struct->array_depths[path_struct->array_depth_count - 1].index == 0) &&
+                struct_field_is_array(field_ptr)) {
+                break;
+            }
+        }
         typename = get_struct_field_typename(field_ptr, &typename_len);
         if ((struct_ptr = get_structn(typename, typename_len)) == NULL) {
             return false;
@@ -301,13 +345,21 @@ static bool path_update(void) {
         if (push_new_hash_depth(true) == false) {
             return false;
         }
-        // get the struct typehash
-        if (type_hash(typename, typename_len, hash) == false) {
-            return false;
-        }
-        feed_last_hash_depth(hash);
 
-        ui_712_queue_struct_to_review();
+        if (do_typehash) {
+            // get the struct typehash
+            if (type_hash(typename, typename_len, hash) == false) {
+                return false;
+            }
+            if (feed_last_hash_depth(hash) == false) {
+                return false;
+            }
+        }
+
+        // TODO: Find a better way to show inner structs in verbose mode when it might be
+        //       an empty array of structs in which case we don't want to show it but the
+        //       size is only known later
+        // ui_712_queue_struct_to_review();
         path_depth_list_push();
     }
     return true;
@@ -328,7 +380,9 @@ bool path_set_root(const char *const struct_name, uint8_t name_length) {
         return false;
     }
 
-    path_struct->root_struct = get_structn(struct_name, name_length);
+    if ((path_struct->root_struct = get_structn(struct_name, name_length)) == NULL) {
+        return false;
+    }
 
     if (path_struct->root_struct == NULL) {
         PRINTF("Struct name not found (");
@@ -346,8 +400,9 @@ bool path_set_root(const char *const struct_name, uint8_t name_length) {
     if (type_hash(struct_name, name_length, hash) == false) {
         return false;
     }
-    feed_last_hash_depth(hash);
-    //
+    if (feed_last_hash_depth(hash) == false) {
+        return false;
+    }
 
     // init depth, at 0 : empty path
     path_struct->depth_count = 0;
@@ -366,7 +421,7 @@ bool path_set_root(const char *const struct_name, uint8_t name_length) {
     struct_state = DEFINED;
 
     // because the first field could be a struct type
-    path_update();
+    path_update(true, true, true);
     return true;
 }
 
@@ -408,6 +463,27 @@ static bool check_and_add_array_depth(const void *depth,
 }
 
 /**
+ * Back-up the current path
+ *
+ * Used for the handling of discarded filtered fields
+ */
+static void backup_path(void) {
+    const void *field_ptr;
+
+    memcpy(path_backup, path_struct, sizeof(*path_backup));
+    // decrease while it does not point to an array type
+    while (path_backup->depth_count > 1) {
+        if ((field_ptr = path_backup_get_nth_field(path_backup->depth_count)) == NULL) {
+            return;
+        }
+        if (struct_field_is_array(field_ptr)) {
+            break;
+        }
+        path_backup->depth_count -= 1;
+    }
+}
+
+/**
  * Add a new array depth with a given size (number of elements).
  *
  * @param[in] data pointer to the number of elements
@@ -421,6 +497,9 @@ bool path_new_array_depth(const uint8_t *const data, uint8_t length) {
     uint8_t total_count = 0;
     uint8_t pidx;
     bool is_custom;
+    uint8_t array_size;
+    uint8_t array_depth_count_bak;
+    cx_err_t error = CX_INTERNAL_ERROR;
 
     if (path_struct == NULL) {
         apdu_response_code = APDU_RESPONSE_CONDITION_NOT_SATISFIED;
@@ -430,6 +509,14 @@ bool path_new_array_depth(const uint8_t *const data, uint8_t length) {
         return false;
     }
 
+    array_size = *data;
+    if (array_size == 0) {
+        backup_path();
+    }
+    if (!path_update(false, array_size > 0, array_size > 0)) {
+        return false;
+    }
+    array_depth_count_bak = path_struct->array_depth_count;
     for (pidx = 0; pidx < path_struct->depth_count; ++pidx) {
         if ((field_ptr = get_nth_field(NULL, pidx + 1)) == NULL) {
             apdu_response_code = APDU_RESPONSE_CONDITION_NOT_SATISFIED;
@@ -442,7 +529,7 @@ bool path_new_array_depth(const uint8_t *const data, uint8_t length) {
             }
             total_count += depth_count;
             if (total_count > path_struct->array_depth_count) {
-                if (!check_and_add_array_depth(depth, total_count, pidx, *data)) {
+                if (!check_and_add_array_depth(depth, total_count, pidx, array_size)) {
                     return false;
                 }
                 break;
@@ -463,11 +550,22 @@ bool path_new_array_depth(const uint8_t *const data, uint8_t length) {
         cx_sha3_t *hash_ctx = get_last_hash_ctx();
         cx_sha3_t *old_ctx = hash_ctx - 1;
 
-        memcpy(hash_ctx, old_ctx, sizeof(*old_ctx));
-        cx_keccak_init(old_ctx, 256);  // init hash
+        if (array_size > 0) {
+            memcpy(hash_ctx, old_ctx, sizeof(*old_ctx));
+        } else {
+            CX_CHECK(cx_keccak_init_no_throw(hash_ctx, 256));
+        }
+        CX_CHECK(cx_keccak_init_no_throw(old_ctx, 256));
+    }
+    if (array_size == 0) {
+        do {
+            path_advance(false);
+        } while (path_struct->array_depth_count > array_depth_count_bak);
     }
 
     return true;
+end:
+    return false;
 }
 
 /**
@@ -488,7 +586,6 @@ static bool path_advance_in_struct(void) {
     }
     if (path_struct->depth_count > 0) {
         *depth += 1;
-        ui_712_notify_filter_change();
         end_reached = (*depth == fields_count);
     }
     if (end_reached) {
@@ -515,8 +612,8 @@ static bool path_advance_in_array(void) {
 
         if ((path_struct->array_depth_count > 0) &&
             (arr_depth->path_index == (path_struct->depth_count - 1))) {
-            arr_depth->size -= 1;
-            if (arr_depth->size == 0) {
+            arr_depth->index += 1;
+            if (arr_depth->index == arr_depth->size) {
                 array_depth_list_pop();
                 end_reached = true;
             } else {
@@ -532,7 +629,7 @@ static bool path_advance_in_array(void) {
  *
  * @return whether the advancement was successful or not
  */
-bool path_advance(void) {
+bool path_advance(bool do_typehash) {
     bool end_reached;
 
     do {
@@ -542,8 +639,7 @@ bool path_advance(void) {
             end_reached = false;
         }
     } while (end_reached);
-    path_update();
-    return true;
+    return path_update(true, true, do_typehash);
 }
 
 /**
@@ -571,15 +667,90 @@ const void *path_get_root(void) {
 }
 
 /**
- * Get the current amount of depth
+ * Get the current amount of depth in a given path struct
+ *
+ * @param[in] given path struct
+ * @return depth count
+ */
+static uint8_t get_depth_count(const s_path *path) {
+    if (path == NULL) {
+        return 0;
+    }
+    return path->depth_count;
+}
+
+/**
+ * Get the current amount of depth in the path
  *
  * @return depth count
  */
 uint8_t path_get_depth_count(void) {
-    if (path_struct == NULL) {
-        return 0;
+    return get_depth_count(path_struct);
+}
+
+/**
+ * Get the current amount of depth in the backup path
+ *
+ * @return depth count
+ */
+uint8_t path_backup_get_depth_count(void) {
+    return get_depth_count(path_backup);
+}
+
+/**
+ * Check if the given relative path exists in the backup path
+ *
+ * @param[in] path given path
+ * @param[in] length length of the path
+ * @return whether it exists or not
+ */
+bool path_exists_in_backup(const char *path, size_t length) {
+    size_t offset = 0;
+    size_t i;
+    const void *field_ptr;
+    const char *typename;
+    uint8_t typename_len;
+    const void *struct_ptr;
+    uint8_t fields_count;
+    const char *key;
+    uint8_t key_len;
+
+    field_ptr = get_nth_field_from(path_backup, NULL, path_backup->depth_count);
+    while (offset < length) {
+        if (((offset + 1) > length) || (memcmp(path + offset, ".", 1) != 0)) {
+            return false;
+        }
+        offset += 1;
+        if (((offset + 2) <= length) && (memcmp(path + offset, "[]", 2) == 0)) {
+            if (!struct_field_is_array(field_ptr)) {
+                return false;
+            }
+            offset += 2;
+        } else if (offset < length) {
+            for (i = 0; ((offset + i) < length) && (path[offset + i] != '.'); ++i)
+                ;
+            typename = get_struct_field_custom_typename(field_ptr, &typename_len);
+            if ((struct_ptr = get_structn(typename, typename_len)) == NULL) {
+                return false;
+            }
+            field_ptr = get_struct_fields_array(struct_ptr, &fields_count);
+            while (fields_count > 0) {
+                key = get_struct_field_keyname(field_ptr, &key_len);
+                if ((key_len == i) && (memcmp(key, path + offset, i) == 0)) {
+                    break;
+                }
+                field_ptr = get_next_struct_field(field_ptr);
+                fields_count -= 1;
+            }
+            if (fields_count == 0) {
+                return false;
+            }
+            offset += i;
+        } else {
+            return false;
+        }
     }
-    return path_struct->depth_count;
+    return true;
 }
 
 /**
@@ -589,13 +760,15 @@ uint8_t path_get_depth_count(void) {
  */
 bool path_init(void) {
     if (path_struct == NULL) {
-        if ((path_struct = MEM_ALLOC_AND_ALIGN_TYPE(*path_struct)) == NULL) {
+        if (((path_struct = MEM_ALLOC_AND_ALIGN_TYPE(*path_struct)) == NULL) ||
+            ((path_backup = MEM_ALLOC_AND_ALIGN_TYPE(*path_backup)) == NULL)) {
             apdu_response_code = APDU_RESPONSE_INSUFFICIENT_MEMORY;
         } else {
-            path_struct->depth_count = 0;
+            explicit_bzero(path_struct, sizeof(*path_struct));
+            explicit_bzero(path_backup, sizeof(*path_backup));
         }
     }
-    return path_struct != NULL;
+    return (path_struct != NULL) && (path_backup != NULL);
 }
 
 /**

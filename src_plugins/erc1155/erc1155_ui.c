@@ -2,9 +2,9 @@
 
 #include <string.h>
 #include "erc1155_plugin.h"
+#include "eth_plugin_internal.h"
 #include "eth_plugin_interface.h"
-#include "ethUtils.h"
-#include "utils.h"
+#include "common_utils.h"
 
 static void set_approval_for_all_ui(ethQueryContractUI_t *msg, erc1155_context_t *context) {
     switch (msg->screenIndex) {
@@ -14,11 +14,12 @@ static void set_approval_for_all_ui(ethQueryContractUI_t *msg, erc1155_context_t
             } else {
                 strlcpy(msg->title, "Revoke", msg->titleLength);
             }
-            getEthDisplayableAddress(context->address,
-                                     msg->msg,
-                                     msg->msgLength,
-                                     &global_sha3,
-                                     chainConfig->chainId);
+            if (!getEthDisplayableAddress(context->address,
+                                          msg->msg,
+                                          msg->msgLength,
+                                          chainConfig->chainId)) {
+                msg->result = ETH_PLUGIN_RESULT_ERROR;
+            }
             break;
         case 1:
             strlcpy(msg->title, "To Manage ALL", msg->titleLength);
@@ -26,11 +27,12 @@ static void set_approval_for_all_ui(ethQueryContractUI_t *msg, erc1155_context_t
             break;
         case 2:
             strlcpy(msg->title, "NFT Address", msg->titleLength);
-            getEthDisplayableAddress(msg->item1->nft.contractAddress,
-                                     msg->msg,
-                                     msg->msgLength,
-                                     &global_sha3,
-                                     chainConfig->chainId);
+            if (!getEthDisplayableAddress(msg->item1->nft.contractAddress,
+                                          msg->msg,
+                                          msg->msgLength,
+                                          chainConfig->chainId)) {
+                msg->result = ETH_PLUGIN_RESULT_ERROR;
+            }
             break;
         default:
             PRINTF("Unsupported screen index %d\n", msg->screenIndex);
@@ -43,11 +45,12 @@ static void set_transfer_ui(ethQueryContractUI_t *msg, erc1155_context_t *contex
     switch (msg->screenIndex) {
         case 0:
             strlcpy(msg->title, "To", msg->titleLength);
-            getEthDisplayableAddress(context->address,
-                                     msg->msg,
-                                     msg->msgLength,
-                                     &global_sha3,
-                                     chainConfig->chainId);
+            if (!getEthDisplayableAddress(context->address,
+                                          msg->msg,
+                                          msg->msgLength,
+                                          chainConfig->chainId)) {
+                msg->result = ETH_PLUGIN_RESULT_ERROR;
+            }
             break;
         case 1:
             strlcpy(msg->title, "Collection Name", msg->titleLength);
@@ -55,22 +58,27 @@ static void set_transfer_ui(ethQueryContractUI_t *msg, erc1155_context_t *contex
             break;
         case 2:
             strlcpy(msg->title, "NFT Address", msg->titleLength);
-            getEthDisplayableAddress(msg->item1->nft.contractAddress,
-                                     msg->msg,
-                                     msg->msgLength,
-                                     &global_sha3,
-                                     chainConfig->chainId);
+            if (!getEthDisplayableAddress(msg->item1->nft.contractAddress,
+                                          msg->msg,
+                                          msg->msgLength,
+                                          chainConfig->chainId)) {
+                msg->result = ETH_PLUGIN_RESULT_ERROR;
+            }
             break;
         case 3:
             strlcpy(msg->title, "NFT ID", msg->titleLength);
-            uint256_to_decimal(context->tokenId,
-                               sizeof(context->tokenId),
-                               msg->msg,
-                               msg->msgLength);
+            if (!uint256_to_decimal(context->tokenId,
+                                    sizeof(context->tokenId),
+                                    msg->msg,
+                                    msg->msgLength)) {
+                msg->result = ETH_PLUGIN_RESULT_ERROR;
+            }
             break;
         case 4:
             strlcpy(msg->title, "Quantity", msg->titleLength);
-            tostring256(&context->value, 10, msg->msg, msg->msgLength);
+            if (!tostring256(&context->value, 10, msg->msg, msg->msgLength)) {
+                msg->result = ETH_PLUGIN_RESULT_ERROR;
+            }
             break;
         default:
             PRINTF("Unsupported screen index %d\n", msg->screenIndex);
@@ -85,11 +93,12 @@ static void set_batch_transfer_ui(ethQueryContractUI_t *msg, erc1155_context_t *
     switch (msg->screenIndex) {
         case 0:
             strlcpy(msg->title, "To", msg->titleLength);
-            getEthDisplayableAddress(context->address,
-                                     msg->msg,
-                                     msg->msgLength,
-                                     &global_sha3,
-                                     chainConfig->chainId);
+            if (!getEthDisplayableAddress(context->address,
+                                          msg->msg,
+                                          msg->msgLength,
+                                          chainConfig->chainId)) {
+                msg->result = ETH_PLUGIN_RESULT_ERROR;
+            }
             break;
         case 1:
             strlcpy(msg->title, "Collection Name", msg->titleLength);
@@ -97,15 +106,19 @@ static void set_batch_transfer_ui(ethQueryContractUI_t *msg, erc1155_context_t *
             break;
         case 2:
             strlcpy(msg->title, "NFT Address", msg->titleLength);
-            getEthDisplayableAddress(msg->item1->nft.contractAddress,
-                                     msg->msg,
-                                     msg->msgLength,
-                                     &global_sha3,
-                                     chainConfig->chainId);
+            if (!getEthDisplayableAddress(msg->item1->nft.contractAddress,
+                                          msg->msg,
+                                          msg->msgLength,
+                                          chainConfig->chainId)) {
+                msg->result = ETH_PLUGIN_RESULT_ERROR;
+            }
             break;
         case 3:
             strlcpy(msg->title, "Total Quantity", msg->titleLength);
-            tostring256(&context->value, 10, &quantity_str[0], sizeof(quantity_str));
+            if (!tostring256(&context->value, 10, &quantity_str[0], sizeof(quantity_str))) {
+                msg->result = ETH_PLUGIN_RESULT_ERROR;
+                break;
+            }
             snprintf(msg->msg,
                      msg->msgLength,
                      "%s from %d NFT IDs",
@@ -119,8 +132,7 @@ static void set_batch_transfer_ui(ethQueryContractUI_t *msg, erc1155_context_t *
     }
 }
 
-void handle_query_contract_ui_1155(void *parameters) {
-    ethQueryContractUI_t *msg = (ethQueryContractUI_t *) parameters;
+void handle_query_contract_ui_1155(ethQueryContractUI_t *msg) {
     erc1155_context_t *context = (erc1155_context_t *) msg->pluginContext;
 
     msg->result = ETH_PLUGIN_RESULT_OK;

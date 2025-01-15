@@ -2,9 +2,13 @@
 
 #include "shared_context.h"
 #include "ui_callbacks.h"
+#include "uint_common.h"
 
 void prepare_eth2_public_key() {
-    snprintf(strings.tmp.tmp, 100, "0x%.*H", 48, tmpCtx.publicKeyContext.publicKey.W);
+    array_bytes_string(strings.tmp.tmp,
+                       sizeof(strings.tmp.tmp),
+                       tmpCtx.publicKeyContext.publicKey.W,
+                       48);
 }
 
 // clang-format off
@@ -27,7 +31,7 @@ UX_STEP_NOCB_INIT(
 UX_STEP_CB(
     ux_display_public_eth2_flow_3_step,
     pb,
-    io_seproxyhal_touch_eth2_address_ok(NULL),
+    io_seproxyhal_touch_eth2_address_ok(),
     {
       &C_icon_validate_14,
       "Approve",
@@ -35,7 +39,7 @@ UX_STEP_CB(
 UX_STEP_CB(
     ux_display_public_eth2_flow_4_step,
     pb,
-    io_seproxyhal_touch_address_cancel(NULL),
+    address_cancel_cb(),
     {
       &C_icon_crossmark,
       "Reject",

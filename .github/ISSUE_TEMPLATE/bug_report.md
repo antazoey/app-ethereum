@@ -15,12 +15,12 @@ Describe your issue in as much detail as possible here.
 
 * OS and version
 * branch that causes this issue
-* Device (Nano S, Nano X, Ledger Blue)
+* Device (Nano S, Nano S Plus, Nano X, Ledger Blue)
 
 ## Steps to reproduce
 
-* Tell us how to reproduce this issue <br />
-* Where the issue is, if you know <br />
+* Tell us how to reproduce this issue
+* Where the issue is, if you know
 * Which commands triggered the issue, if any
 
 ## Expected behaviour
@@ -37,4 +37,5 @@ Please paste any logs here that demonstrate the issue, if they exist
 
 ## Proposed solution
 
-If you have an idea of how to fix this issue, please write it down here, so we can begin discussing it
+If you have an idea of how to fix this issue, please write it down here,
+so we can begin discussing it

@@ -1,15 +1,24 @@
 #include "shared_context.h"
 #include "ui_callbacks.h"
 #include "chainConfig.h"
-#include "utils.h"
-#include "feature_signTx.h"
+#include "common_utils.h"
 #include "network.h"
 #include "eth_plugin_handler.h"
 #include "ui_plugin.h"
 #include "common_ui.h"
 #include "plugins.h"
-#include "domain_name.h"
-#include "ui_domain_name.h"
+#include "trusted_name.h"
+#include "ui_trusted_name.h"
+
+static unsigned int data_ok_cb(void) {
+    ui_idle();
+    return io_seproxyhal_touch_data_ok();
+}
+
+static unsigned int data_cancel_cb(void) {
+    ui_idle();
+    return io_seproxyhal_touch_data_cancel();
+}
 
 // clang-format off
 UX_STEP_NOCB(
@@ -31,7 +40,7 @@ UX_STEP_NOCB(
 UX_STEP_CB(
     ux_confirm_selector_flow_3_step,
     pb,
-    io_seproxyhal_touch_data_ok(NULL),
+    data_ok_cb(),
     {
       &C_icon_validate_14,
       "Approve",
@@ -39,7 +48,7 @@ UX_STEP_CB(
 UX_STEP_CB(
     ux_confirm_selector_flow_4_step,
     pb,
-    io_seproxyhal_touch_data_cancel(NULL),
+    data_cancel_cb(),
     {
       &C_icon_crossmark,
       "Reject",
@@ -72,7 +81,7 @@ UX_STEP_NOCB(
 UX_STEP_CB(
     ux_confirm_parameter_flow_3_step,
     pb,
-    io_seproxyhal_touch_data_ok(NULL),
+    data_ok_cb(),
     {
       &C_icon_validate_14,
       "Approve",
@@ -80,7 +89,7 @@ UX_STEP_CB(
 UX_STEP_CB(
     ux_confirm_parameter_flow_4_step,
     pb,
-    io_seproxyhal_touch_data_cancel(NULL),
+    data_cancel_cb(),
     {
       &C_icon_crossmark,
       "Reject",
@@ -102,6 +111,16 @@ UX_STEP_NOCB(ux_approval_review_step,
       "Review",
       "transaction",
     });
+UX_STEP_NOCB(ux_approval_tx_hash_step,
+    bnnn_paging,
+    {
+#ifdef TARGET_NANOS
+      .title = "TX hash",
+#else
+      .title = "Transaction hash",
+#endif
+      .text = strings.common.tx_hash
+    });
 UX_STEP_NOCB(
     ux_approval_amount_step,
     bnnn_paging,
@@ -110,11 +129,18 @@ UX_STEP_NOCB(
       .text = strings.common.fullAmount
     });
 UX_STEP_NOCB(
-    ux_approval_address_step,
+    ux_approval_from_step,
     bnnn_paging,
     {
-      .title = "Address",
-      .text = strings.common.fullAddress,
+      .title = "From",
+      .text = strings.common.fromAddress,
+    });
+UX_STEP_NOCB(
+    ux_approval_to_step,
+    bnnn_paging,
+    {
+      .title = "To",
+      .text = strings.common.toAddress,
     });
 
 UX_STEP_NOCB_INIT(
@@ -122,7 +148,7 @@ UX_STEP_NOCB_INIT(
   bnnn_paging,
   plugin_ui_get_id(),
   {
-    .title = strings.common.fullAddress,
+    .title = strings.common.toAddress,
     .text = strings.common.fullAmount
   });
 
@@ -138,7 +164,7 @@ UX_FLOW_DEF_NOCB(
   ux_plugin_approval_display_step,
   bnnn_paging,
   {
-    .title = strings.common.fullAddress,
+    .title = strings.common.toAddress,
     .text = strings.common.fullAmount
   });
 
@@ -157,6 +183,7 @@ UX_STEP_NOCB(
       .title = "Max Fees",
       .text = strings.common.maxFee,
     });
+
 UX_STEP_NOCB(
     ux_approval_network_step,
     bnnn_paging,
@@ -168,16 +195,25 @@ UX_STEP_NOCB(
 UX_STEP_CB(
     ux_approval_accept_step,
     pbb,
-    io_seproxyhal_touch_tx_ok(NULL),
+    tx_ok_cb(),
     {
       &C_icon_validate_14,
       "Accept",
       "and send",
     });
 UX_STEP_CB(
+    ux_approval_accept_blind_step,
+    pbb,
+    tx_ok_cb(),
+    {
+      &C_icon_validate_14,
+      "Accept risk",
+      "and send",
+    });
+UX_STEP_CB(
     ux_approval_reject_step,
     pb,
-    io_seproxyhal_touch_tx_cancel(NULL),
+    tx_cancel_cb(),
     {
       &C_icon_crossmark,
       "Reject",
@@ -190,14 +226,6 @@ UX_STEP_NOCB(
       .title = "Nonce",
       .text = strings.common.nonce,
     });
-
-UX_STEP_NOCB(ux_approval_blind_signing_warning_step,
-    pbb,
-    {
-      &C_icon_warning,
-      "Blind",
-      "Signing",
-    });
 // clang-format on
 
 const ux_flow_step_t *ux_approval_tx_flow[15];
@@ -206,45 +234,69 @@ void ux_approve_tx(bool fromPlugin) {
     int step = 0;
     ux_approval_tx_flow[step++] = &ux_approval_review_step;
 
-    if (!fromPlugin && tmpContent.txContent.dataPresent && !N_storage.contractDetails) {
-        ux_approval_tx_flow[step++] = &ux_approval_blind_signing_warning_step;
-    }
-
     if (fromPlugin) {
         // Add the special dynamic display logic
         ux_approval_tx_flow[step++] = &ux_plugin_approval_id_step;
+        if (pluginType != EXTERNAL) {
+            if (strings.common.fromAddress[0] != 0) {
+                ux_approval_tx_flow[step++] = &ux_approval_from_step;
+            }
+        }
         ux_approval_tx_flow[step++] = &ux_plugin_approval_before_step;
         ux_approval_tx_flow[step++] = &ux_plugin_approval_display_step;
         ux_approval_tx_flow[step++] = &ux_plugin_approval_after_step;
     } else {
+        if (tmpContent.txContent.dataPresent) {
+#pragma GCC diagnostic ignored "-Wformat"
+            snprintf(strings.common.tx_hash,
+                     sizeof(strings.common.tx_hash),
+                     "0x%.*h",
+                     sizeof(tmpCtx.transactionContext.hash),
+                     tmpCtx.transactionContext.hash);
+#pragma GCC diagnostic warning "-Wformat"
+            ux_approval_tx_flow[step++] = &ux_approval_tx_hash_step;
+        }
         // We're in a regular transaction, just show the amount and the address
-        ux_approval_tx_flow[step++] = &ux_approval_amount_step;
-#ifdef HAVE_DOMAIN_NAME
-        uint64_t chain_id = get_chain_id();
-        if (has_domain_name(&chain_id, tmpContent.txContent.destination)) {
-            ux_approval_tx_flow[step++] = &ux_domain_name_step;
-            if (N_storage.verbose_domain_name) {
-                ux_approval_tx_flow[step++] = &ux_approval_address_step;
+        if (strings.common.fromAddress[0] != 0) {
+            ux_approval_tx_flow[step++] = &ux_approval_from_step;
+        }
+        if (!tmpContent.txContent.dataPresent ||
+            !allzeroes(tmpContent.txContent.value.value, tmpContent.txContent.value.length)) {
+            ux_approval_tx_flow[step++] = &ux_approval_amount_step;
+        }
+#ifdef HAVE_TRUSTED_NAME
+        uint64_t chain_id = get_tx_chain_id();
+        e_name_type type = TN_TYPE_ACCOUNT;
+        e_name_source source = TN_SOURCE_ENS;
+        if (get_trusted_name(1, &type, 1, &source, &chain_id, tmpContent.txContent.destination) !=
+            NULL) {
+            ux_approval_tx_flow[step++] = &ux_trusted_name_step;
+            if (N_storage.verbose_trusted_name) {
+                ux_approval_tx_flow[step++] = &ux_approval_to_step;
             }
         } else {
-#endif  // HAVE_DOMAIN_NAME
-            ux_approval_tx_flow[step++] = &ux_approval_address_step;
-#ifdef HAVE_DOMAIN_NAME
+#endif  // HAVE_TRUSTED_NAME
+            ux_approval_tx_flow[step++] = &ux_approval_to_step;
+#ifdef HAVE_TRUSTED_NAME
         }
-#endif  // HAVE_DOMAIN_NAME
+#endif  // HAVE_TRUSTED_NAME
     }
 
     if (N_storage.displayNonce) {
         ux_approval_tx_flow[step++] = &ux_approval_nonce_step;
     }
 
-    uint64_t chain_id = get_chain_id();
-    if (chainConfig->chainId == ETHEREUM_MAINNET_CHAINID && chain_id != chainConfig->chainId) {
+    uint64_t chain_id = get_tx_chain_id();
+    if ((chainConfig->chainId == ETHEREUM_MAINNET_CHAINID) && (chain_id != chainConfig->chainId)) {
         ux_approval_tx_flow[step++] = &ux_approval_network_step;
     }
 
     ux_approval_tx_flow[step++] = &ux_approval_fees_step;
-    ux_approval_tx_flow[step++] = &ux_approval_accept_step;
+    if (tmpContent.txContent.dataPresent) {
+        ux_approval_tx_flow[step++] = &ux_approval_accept_blind_step;
+    } else {
+        ux_approval_tx_flow[step++] = &ux_approval_accept_step;
+    }
     ux_approval_tx_flow[step++] = &ux_approval_reject_step;
     ux_approval_tx_flow[step++] = FLOW_END_STEP;
 
