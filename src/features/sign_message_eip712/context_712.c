@@ -1,7 +1,6 @@
 #include "context_712.h"
 #include "app_mem_utils.h"
 #include "mem_utils.h"
-#include "sol_typenames.h"
 #include "path.h"
 #include "field_hash.h"
 #include "ui_logic.h"
@@ -27,10 +26,6 @@ bool eip712_context_init(void) {
     // init global variables
     if (APP_MEM_CALLOC((void **) &eip712_context, sizeof(*eip712_context)) == false) {
         apdu_response_code = SWO_INSUFFICIENT_MEMORY;
-        return false;
-    }
-
-    if (sol_typenames_init() == false) {
         return false;
     }
 
@@ -66,7 +61,6 @@ void eip712_context_deinit(void) {
     path_deinit();
     field_hash_deinit();
     ui_712_deinit();
-    sol_typenames_deinit();
     APP_MEM_FREE_AND_NULL((void **) &eip712_context);
 }
 
