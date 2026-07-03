@@ -197,32 +197,34 @@ void ui_712_check_field_filtering(void) {
 /**
  * Set a new intent for the EIP-712 batch transaction
  *
+ * @return whether it was successful or not
  */
-void ui_712_set_intent(void) {
+bool ui_712_set_intent(void) {
     s_ui_712_pair *new_pair = NULL;
     const char *title = "Review transaction";
     size_t title_length = strlen(title);
 
     // Allocate memory for the new pair
     if (APP_MEM_CALLOC((void **) &new_pair, sizeof(*new_pair)) == false) {
-        return;
+        return false;
     }
     // Add it to the chained list
     flist_push_back((flist_node_t **) &ui_ctx->ui_pairs, (flist_node_t *) new_pair);
 
     // Allocate and copy the title
     if (APP_MEM_CALLOC((void **) &new_pair->key, title_length + 1) == false) {
-        return;
+        return false;
     }
     memcpy(new_pair->key, title, title_length);
 
     // Allocate and clear the intent buffer
     if (APP_MEM_CALLOC((void **) &new_pair->value, N_OF_M_LENGTH) == false) {
-        return;
+        return false;
     }
 
     // Mark it as an intent
     new_pair->start_intent = true;
+    return true;
 }
 
 /**
@@ -230,18 +232,20 @@ void ui_712_set_intent(void) {
  *
  * @param[in] str the new title
  * @param[in] length its length
+ * @return whether it was successful or not
  */
-void ui_712_set_title(const char *str, size_t length) {
+bool ui_712_set_title(const char *str, size_t length) {
     s_ui_712_pair *new_pair = NULL;
 
     if (APP_MEM_CALLOC((void **) &new_pair, sizeof(*new_pair)) == false) {
-        return;
+        return false;
     }
     flist_push_back((flist_node_t **) &ui_ctx->ui_pairs, (flist_node_t *) new_pair);
     if (APP_MEM_CALLOC((void **) &new_pair->key, length + 1) == false) {
-        return;
+        return false;
     }
     memcpy(new_pair->key, str, length);
+    return true;
 }
 
 /**
@@ -251,37 +255,39 @@ void ui_712_set_title(const char *str, size_t length) {
  *
  * @param[in] str the new value
  * @param[in] length its length
+ * @return whether it was successful or not
  */
-void ui_712_set_value(const char *str, size_t length) {
+bool ui_712_set_value(const char *str, size_t length) {
     s_ui_712_pair *tmp = ui_ctx->ui_pairs;
 
     if (tmp == NULL) {
         // No pairs created yet
-        return;
+        return false;
     }
     while (((flist_node_t *) tmp)->next != NULL) {
         tmp = (s_ui_712_pair *) ((flist_node_t *) tmp)->next;
     }
     if (tmp->value != NULL) {
         PRINTF("Value already exist for tag %s: %s\n", tmp->key, tmp->value);
-        return;
+        return false;
     }
     if ((str != NULL) && (length > 0)) {
         // buffer is directly provided with parameters
         if (APP_MEM_CALLOC((void **) &tmp->value, length + 1) == false) {
-            return;
+            return false;
         }
         memcpy(tmp->value, str, length);
     } else {
         // Add the value from the global variable strings.tmp.tmp
         if ((tmp->value = APP_MEM_STRDUP(strings.tmp.tmp)) == NULL) {
-            return;
+            return false;
         }
     }
     tmp->end_intent = validate_instruction_hash();
     if (tmp->end_intent) {
         PRINTF("[Intent] End\n");
     }
+    return true;
 }
 
 /**
@@ -329,9 +335,13 @@ bool ui_712_review_struct(const s_struct_712 *struct_ptr) {
         return false;
     }
 
-    ui_712_set_title(title, strlen(title));
+    if (!ui_712_set_title(title, strlen(title))) {
+        return false;
+    }
     if ((struct_name = struct_ptr->name) != NULL) {
-        ui_712_set_value(struct_name, strlen(struct_name));
+        if (!ui_712_set_value(struct_name, strlen(struct_name))) {
+            return false;
+        }
     }
     return ui_712_redraw_generic_step();
 }
@@ -343,14 +353,18 @@ bool ui_712_review_network(const uint64_t *chain_id) {
     if (*chain_id == chainConfig->chainId) {
         return true;
     }
-    ui_712_set_title(title, strlen(title));
+    if (!ui_712_set_title(title, strlen(title))) {
+        return false;
+    }
     if ((buf = get_network_name_from_chain_id(chain_id)) == NULL) {
         if (!u64_to_string(*chain_id, strings.tmp.tmp, NETWORK_STRING_MAX_SIZE)) {
             return false;
         }
         buf = strings.tmp.tmp;
     }
-    ui_712_set_value(buf, strlen(buf));
+    if (!ui_712_set_value(buf, strlen(buf))) {
+        return false;
+    }
     return ui_712_redraw_generic_step();
 }
 
@@ -364,12 +378,16 @@ bool ui_712_message_hash(void) {
     // Message hash > Domain hash > Message hash
     // as the last three fields
     if (!N_storage.displayHash) {
-        ui_712_set_title(title, strlen(title));
+        if (!ui_712_set_title(title, strlen(title))) {
+            return false;
+        }
         array_bytes_string(strings.tmp.tmp,
                            sizeof(strings.tmp.tmp),
                            tmpCtx.messageSigningContext712.messageHash,
                            KECCAK256_HASH_BYTESIZE);
-        ui_712_set_value(NULL, 0);
+        if (!ui_712_set_value(NULL, 0)) {
+            return false;
+        }
     }
     ui_ctx->end_reached = true;
     return ui_712_redraw_generic_step();
@@ -642,7 +660,9 @@ static bool ui_712_format_amount_join(void) {
         }
     }
     ui_ctx->field_flags |= UI_712_FIELD_SHOWN;
-    ui_712_set_title(amount_join->name, strlen(amount_join->name));
+    if (!ui_712_set_title(amount_join->name, strlen(amount_join->name))) {
+        return false;
+    }
     flist_remove((flist_node_t **) &ui_ctx->amount.joins,
                  (flist_node_t *) amount_join,
                  (f_list_node_del) delete_amount_join);
@@ -777,11 +797,10 @@ static bool ui_712_format_datetime(const uint8_t *data,
     return time_format_to_utc(&timestamp, strings.tmp.tmp, sizeof(strings.tmp.tmp));
 }
 
-static void ui_712_set_intent_field(const char *value) {
+static bool ui_712_set_intent_field(const char *value) {
     const char key[] = "Transaction type";
 
-    ui_712_set_title(key, strlen(key));
-    ui_712_set_value(value, strlen(value));
+    return ui_712_set_title(key, strlen(key)) && ui_712_set_value(value, strlen(value));
 }
 
 static bool handle_fallback_empty_calldata(const s_eip712_calldata_info *calldata_info) {
@@ -792,7 +811,9 @@ static bool handle_fallback_empty_calldata(const s_eip712_calldata_info *calldat
     const char *ticker;
 
     if (calldata_info->amount_state == CALLDATA_INFO_PARAM_SET) {
-        ui_712_set_intent_field("Send");
+        if (!ui_712_set_intent_field("Send")) {
+            return false;
+        }
 
         if (calldata_info->chain_id != 0) {
             chain_id = calldata_info->chain_id;
@@ -810,24 +831,31 @@ static bool handle_fallback_empty_calldata(const s_eip712_calldata_info *calldat
                             buf_size)) {
             return false;
         }
-        ui_712_set_title("Amount", 6);
-        ui_712_set_value(buf, strlen(buf));
+        if (!ui_712_set_title("Amount", 6) || !ui_712_set_value(buf, strlen(buf))) {
+            return false;
+        }
     } else {
-        ui_712_set_intent_field("Empty transaction");
+        if (!ui_712_set_intent_field("Empty transaction")) {
+            return false;
+        }
     }
 
     e_name_type types[] = {TN_TYPE_ACCOUNT};
     e_name_source sources[] = {TN_SOURCE_ENS, TN_SOURCE_LAB, TN_SOURCE_MAB};
     const s_trusted_name *trusted_name;
 
-    ui_712_set_title("To", 2);
+    if (!ui_712_set_title("To", 2)) {
+        return false;
+    }
     if ((trusted_name = get_trusted_name(ARRAYLEN(types),
                                          types,
                                          ARRAYLEN(sources),
                                          sources,
                                          &calldata_info->chain_id,
                                          calldata_info->callee)) != NULL) {
-        ui_712_set_value(trusted_name->name, strlen(trusted_name->name));
+        if (!ui_712_set_value(trusted_name->name, strlen(trusted_name->name))) {
+            return false;
+        }
     } else {
         if (!getEthDisplayableAddress(calldata_info->callee,
                                       buf,
@@ -835,7 +863,9 @@ static bool handle_fallback_empty_calldata(const s_eip712_calldata_info *calldat
                                       calldata_info->chain_id)) {
             return false;
         }
-        ui_712_set_value(buf, strlen(buf));
+        if (!ui_712_set_value(buf, strlen(buf))) {
+            return false;
+        }
     }
     return true;
 }
@@ -1095,7 +1125,9 @@ bool ui_712_feed_to_display(const s_struct_712_field *field_ptr,
     // Check if this field is supposed to be displayed
     if (last && ui_712_field_shown()) {
         // This is the last chunk, we can now set the value
-        ui_712_set_value(NULL, 0);
+        if (!ui_712_set_value(NULL, 0)) {
+            return false;
+        }
 
         return ui_712_redraw_generic_step();
     }
@@ -1312,7 +1344,9 @@ bool ui_712_show_raw_key(const s_struct_712_field *field_ptr) {
     }
 
     if (ui_712_field_shown() && !(ui_ctx->field_flags & UI_712_FIELD_NAME_PROVIDED)) {
-        ui_712_set_title(key, strlen(key));
+        if (!ui_712_set_title(key, strlen(key))) {
+            return false;
+        }
     }
     return true;
 }
@@ -1400,7 +1434,7 @@ void ui_712_set_trusted_name_requirements(uint8_t type_count,
  * Set the tag/value pairs for the review
  *
  */
-void ui_712_push_pairs(void) {
+bool ui_712_push_pairs(void) {
     uint8_t nbPairs = 0;
     uint8_t pair = 0;
     s_ui_712_pair *tmp = NULL;
@@ -1412,7 +1446,9 @@ void ui_712_push_pairs(void) {
         nbPairs += 2;
     }
 
-    ui_pairs_init(nbPairs);
+    if (!ui_pairs_init(nbPairs)) {
+        return false;
+    }
     // Initialize the tag/value pairs from the chain list
     tmp = ui_ctx->ui_pairs;
     while (tmp != NULL) {
@@ -1446,6 +1482,7 @@ void ui_712_push_pairs(void) {
         eip712_format_hash(pair);
         g_pairs[pair].forcePageStart = true;
     }
+    return true;
 }
 
 void add_calldata_info(s_eip712_calldata_info *node) {

@@ -72,9 +72,9 @@ bool ui_712_feed_to_display(const s_struct_712_field *field_ptr,
                             const uint16_t *complete_length,
                             bool last);
 void ui_712_end_sign(void);
-void ui_712_set_intent(void);
-void ui_712_set_title(const char *str, size_t length);
-void ui_712_set_value(const char *str, size_t length);
+bool ui_712_set_intent(void);
+bool ui_712_set_title(const char *str, size_t length);
+bool ui_712_set_value(const char *str, size_t length);
 bool ui_712_message_hash(void);
 bool ui_712_redraw_generic_step(void);
 void ui_712_flag_field(bool show,
@@ -105,7 +105,7 @@ void ui_712_set_trusted_name_requirements(uint8_t type_count,
                                           const e_name_type *types,
                                           uint8_t source_count,
                                           const e_name_source *sources);
-void ui_712_push_pairs(void);
+bool ui_712_push_pairs(void);
 void add_calldata_info(s_eip712_calldata_info *node);
 s_eip712_calldata_info *get_calldata_info(uint8_t index);
 s_eip712_calldata_info *get_current_calldata_info(void);
