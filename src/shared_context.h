@@ -207,6 +207,7 @@ typedef enum swap_mode_e {
 
 extern swap_mode_t G_swap_mode;
 extern uint8_t *G_swap_crosschain_hash;
+extern uint64_t G_swap_expected_chain_id;
 
 typedef enum {
     PLUGIN_TYPE_NONE = 0,

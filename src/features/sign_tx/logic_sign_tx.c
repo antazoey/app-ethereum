@@ -298,6 +298,14 @@ __attribute__((noinline)) static uint16_t finalize_parsing_helper(const txContex
             return APDU_NO_RESPONSE;
         }
     }
+    if (G_called_from_swap && (chain_id != G_swap_expected_chain_id)) {
+        PRINTF("Swap: chain ID mismatch, expected %llu, got %llu\n",
+               G_swap_expected_chain_id,
+               chain_id);
+        send_swap_error_simple(APDU_RESPONSE_MODE_CHECK_FAILED, SWAP_EC_ERROR_GENERIC, APP_CODE_DEFAULT);
+        // unreachable
+        os_sched_exit(0);
+    }
     // Reject pre-EIP-155 LEGACY transactions (no chain_id encoded in V). Their
     // signature carries the legacy v base of 27/28 and is not domain-separated
     // by chain, so any other EVM-compatible chain that still accepts
