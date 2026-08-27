@@ -230,7 +230,7 @@ bool tostring128(const uint128_t *const number,
     clear128(&base);
     LOWER(base) = baseParam;
     uint32_t offset = 0;
-    if ((baseParam < 2) || (baseParam > 16)) {
+    if ((outLength == 0) || (baseParam < 2) || (baseParam > 16)) {
         return false;
     }
     do {
