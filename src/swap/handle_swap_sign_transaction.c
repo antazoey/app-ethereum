@@ -12,6 +12,8 @@ swap_mode_t G_swap_mode;
 uint8_t* G_swap_crosschain_hash = NULL;
 
 uint64_t G_swap_expected_chain_id;
+uint8_t G_swap_expected_token_address[ADDRESS_LENGTH];
+bool G_swap_has_expected_token_address;
 
 typedef enum extra_id_type_e {
     EXTRA_ID_TYPE_NATIVE,
@@ -131,6 +133,10 @@ bool copy_transaction_parameters(create_transaction_parameters_t* sign_transacti
     // Commit the values read from exchange to the clean global space
     G_swap_mode = swap_mode;
     G_swap_expected_chain_id = context.chain_id;
+    G_swap_has_expected_token_address = context.has_token_address;
+    if (context.has_token_address) {
+        memcpy(G_swap_expected_token_address, context.token_address, ADDRESS_LENGTH);
+    }
 
     app_mem_init();
     if ((G_swap_crosschain_hash = APP_MEM_ALLOC(CX_SHA256_SIZE)) == NULL) {

@@ -208,6 +208,8 @@ typedef enum swap_mode_e {
 extern swap_mode_t G_swap_mode;
 extern uint8_t *G_swap_crosschain_hash;
 extern uint64_t G_swap_expected_chain_id;
+extern uint8_t G_swap_expected_token_address[ADDRESS_LENGTH];
+extern bool G_swap_has_expected_token_address;
 
 typedef enum {
     PLUGIN_TYPE_NONE = 0,

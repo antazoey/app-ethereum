@@ -34,6 +34,8 @@ typedef struct {
     asset_info_t swapped_asset_info;
     asset_info_t fees_asset_info;
     uint64_t chain_id;
+    uint8_t token_address[ADDRESS_LENGTH];
+    bool has_token_address;
 } swap_context_t;
 
 typedef struct eth_libargs_s {

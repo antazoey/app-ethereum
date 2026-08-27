@@ -151,6 +151,18 @@ bool parse_swap_config(const uint8_t *config, uint8_t config_len, swap_context_t
         }
     }
 
+    // TODO: Remove this check once CAL is updated to always provide the token contract address
+    // Parse token contract address (ERC-20 swaps only)
+    if (offset < config_len) {
+        if ((config_len - offset) < ADDRESS_LENGTH) {
+            PRINTF("Failed to parse token contract address\n");
+            return false;
+        }
+        memcpy(context->token_address, config + offset, ADDRESS_LENGTH);
+        context->has_token_address = true;
+        offset += ADDRESS_LENGTH;
+    }
+
     return true;
 }
 
