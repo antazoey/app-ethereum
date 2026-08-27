@@ -314,6 +314,10 @@ static bool append_network_info(const s_network_info_ctx *context) {
  * @return whether it was successful
  */
 static bool prepare_network_icon(const s_network_info_ctx *context) {
+    // Any pending icon state belongs to the previous descriptor; drop it so a
+    // descriptor without a signed icon hash cannot inherit it
+    clear_icon();
+
     // Check if the icon hash is provided
     if (allzeroes(context->icon_hash, CX_SHA256_SIZE) == 1) {
         PRINTF("/!\\ Icon hash is not provided!\n");
