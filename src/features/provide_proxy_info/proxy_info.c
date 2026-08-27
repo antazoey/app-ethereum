@@ -223,6 +223,7 @@ bool verify_proxy_info_struct(const s_proxy_info_ctx *context) {
 static bool check_proxy_params(const uint64_t *chain_id,
                                const uint8_t *addr,
                                const uint8_t *selector,
+                               bool descriptor_has_selector,
                                const uint64_t *ref_chain_id,
                                const uint8_t *ref_addr,
                                const uint8_t *ref_selector) {
@@ -232,8 +233,8 @@ static bool check_proxy_params(const uint64_t *chain_id,
     if (memcmp(addr, ref_addr, ADDRESS_LENGTH) != 0) {
         return false;
     }
-    if (selector != NULL) {
-        if (memcmp(selector, ref_selector, CALLDATA_SELECTOR_SIZE) != 0) {
+    if (descriptor_has_selector) {
+        if ((selector == NULL) || (memcmp(selector, ref_selector, CALLDATA_SELECTOR_SIZE) != 0)) {
             return false;
         }
     }
@@ -250,7 +251,8 @@ const uint8_t *get_proxy_contract(const uint64_t *chain_id,
 
     if (!check_proxy_params(chain_id,
                             addr,
-                            g_proxy_info->has_selector ? selector : NULL,
+                            selector,
+                            g_proxy_info->has_selector,
                             &g_proxy_info->chain_id,
                             g_proxy_info->implem_address,
                             g_proxy_info->selector)) {
@@ -269,7 +271,8 @@ const uint8_t *get_implem_contract(const uint64_t *chain_id,
 
     if (!check_proxy_params(chain_id,
                             addr,
-                            g_proxy_info->has_selector ? selector : NULL,
+                            selector,
+                            g_proxy_info->has_selector,
                             &g_proxy_info->chain_id,
                             g_proxy_info->address,
                             g_proxy_info->selector)) {
