@@ -149,6 +149,9 @@ bool is_printable(const char *str, size_t len) {
  */
 void reverseString(char *const str, uint32_t length) {
     uint32_t i, j;
+    if (length < 2) {
+        return;
+    }
     for (i = 0, j = length - 1; i < j; i++, j--) {
         char c;
         c = str[i];
