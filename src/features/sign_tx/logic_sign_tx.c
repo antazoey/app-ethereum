@@ -373,16 +373,24 @@ __attribute__((noinline)) static uint16_t finalize_parsing_helper(const txContex
         ethPluginProvideInfo_t pluginProvideInfo;
         eth_plugin_prepare_provide_info(&pluginProvideInfo);
         if ((pluginFinalize.tokenLookup1 != NULL) || (pluginFinalize.tokenLookup2 != NULL)) {
+            // NFT plugins read item1 as nftInfo_t, others as tokenDefinition_t;
+            // the expected kind is derived from the active plugin
+            e_asset_type expected_type =
+                ((pluginType == PLUGIN_TYPE_ERC721) || (pluginType == PLUGIN_TYPE_ERC1155))
+                    ? ASSET_TYPE_NFT
+                    : ASSET_TYPE_ERC20;
             if (pluginFinalize.tokenLookup1 != NULL) {
                 PRINTF("Lookup1: %.*H\n", ADDRESS_LENGTH, pluginFinalize.tokenLookup1);
-                pluginProvideInfo.item1 = get_asset_info_by_addr(pluginFinalize.tokenLookup1);
+                pluginProvideInfo.item1 =
+                    get_asset_info_by_type_and_addr(expected_type, pluginFinalize.tokenLookup1);
                 if (pluginProvideInfo.item1 != NULL) {
                     PRINTF("Token1 ticker: %s\n", pluginProvideInfo.item1->token.ticker);
                 }
             }
             if (pluginFinalize.tokenLookup2 != NULL) {
                 PRINTF("Lookup2: %.*H\n", ADDRESS_LENGTH, pluginFinalize.tokenLookup2);
-                pluginProvideInfo.item2 = get_asset_info_by_addr(pluginFinalize.tokenLookup2);
+                pluginProvideInfo.item2 =
+                    get_asset_info_by_type_and_addr(expected_type, pluginFinalize.tokenLookup2);
                 if (pluginProvideInfo.item2 != NULL) {
                     PRINTF("Token2 ticker: %s\n", pluginProvideInfo.item2->token.ticker);
                 }

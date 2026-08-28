@@ -1180,8 +1180,9 @@ bool filtering_amount_join_value(const uint8_t *payload,
     // Handling
     if (discarded) return true;
     if (token_idx == TOKEN_IDX_ADDR_IN_DOMAIN) {
-        // Permit (ERC-2612)
-        int resolved_idx = get_asset_index_by_addr(eip712_context->contract_addr);
+        // Permit (ERC-2612): resolving the verifyingContract to a token slot
+        int resolved_idx =
+            get_asset_index_by_type_and_addr(ASSET_TYPE_ERC20, eip712_context->contract_addr);
 
         if (resolved_idx == -1) {
             PRINTF("ERROR: Could not find asset info for verifyingContract address!\n");

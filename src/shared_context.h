@@ -35,6 +35,18 @@
 
 #define MAX_ASSETS 5
 
+// Which kind of metadata was authenticated into an asset slot. extraInfo_t is
+// an untagged union of tokenDefinition_t and nftInfo_t whose first member is
+// the contract address in both cases, so an address-only lookup cannot tell
+// them apart and a consumer would happily read an NFT descriptor as a token
+// one. Slots record their kind so every lookup can demand the type it is about
+// to dereference.
+typedef enum {
+    ASSET_TYPE_NONE = 0,
+    ASSET_TYPE_ERC20,
+    ASSET_TYPE_NFT,
+} e_asset_type;
+
 typedef struct internalStorage_t {
     bool dataAllowed;
     bool contractDetails;
@@ -112,6 +124,9 @@ typedef struct transactionContext_t {
     uint8_t sign_mode;  // e_sign_mode captured at P1_FIRST, pinned for the lifetime of the flow
     union extraInfo_t extraInfo[MAX_ASSETS];
     bool assetSet[MAX_ASSETS];
+    // Kind of descriptor authenticated into each slot, set only once the
+    // signature check passes. Parallel to extraInfo/assetSet.
+    e_asset_type assetType[MAX_ASSETS];
     uint8_t currentAssetIndex;
 } transactionContext_t;
 
