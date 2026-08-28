@@ -256,6 +256,15 @@ bool field_hash(const uint8_t *data, uint8_t data_length, bool partial) {
 
     // first packet for this frame
     if (first) {
+        // Every array level declared in the schema must have a live array context,
+        // otherwise the host could skip the array-size commands and inject the
+        // precomputed aggregate hash of hidden array contents as a base value.
+        if (field_ptr->type_is_array &&
+            (field_ptr->array_level_count != path_get_current_field_array_depth_count())) {
+            PRINTF("Error: value for array field with undeclared levels\n");
+            apdu_response_code = SWO_INCORRECT_DATA;
+            return false;
+        }
         if (!ui_712_show_raw_key(field_ptr)) {
             return false;
         }

@@ -821,6 +821,31 @@ bool path_exists_in_backup(const char *path, size_t length) {
 }
 
 /**
+ * Count how many array levels of the field the path currently points to have a live
+ * array context (instantiated by P2_IMPL_ARRAY commands).
+ *
+ * @return number of active array levels for the current field
+ */
+uint8_t path_get_current_field_array_depth_count(void) {
+    uint8_t count = 0;
+    uint8_t field_path_index;
+
+    if ((path_struct == NULL) || (path_struct->depth_count == 0)) {
+        return 0;
+    }
+    field_path_index = path_struct->depth_count - 1;
+    // Array levels of the current field are the trailing stack entries with its
+    // path index; inner levels are pushed after outer ones.
+    for (int i = path_struct->array_depth_count - 1; i >= 0; --i) {
+        if (path_struct->array_depths[i].path_index != field_path_index) {
+            break;
+        }
+        count += 1;
+    }
+    return count;
+}
+
+/**
  * Initialize the path context with its indexes in memory and sets it with a depth of 0.
  *
  * @return whether the memory allocation were successful.

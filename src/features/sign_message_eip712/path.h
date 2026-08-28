@@ -44,5 +44,6 @@ const void *path_backup_get_nth_field(uint8_t n);
 bool path_exists_in_backup(const char *path, size_t length);
 const void *path_get_nth_field_to_last(uint8_t n);
 uint8_t path_get_depth_count(void);
+uint8_t path_get_current_field_array_depth_count(void);
 uint8_t path_backup_get_depth_count(void);
 s_hash_ctx *get_last_hash_ctx(void);
