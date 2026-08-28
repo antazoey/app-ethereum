@@ -14,6 +14,11 @@ typedef struct erc721_context_t {
     // Calldata `from`: the account being debited, not necessarily the signer
     uint8_t ownerAddress[ADDRESS_LENGTH];
 
+    // safeTransferFrom(...,bytes) receiver payload; forwarded to the
+    // recipient's onERC721Received hook, so its presence must be shown
+    uint32_t data_offset;
+    uint32_t data_length;
+
     bool approved;
 
     uint8_t next_param;

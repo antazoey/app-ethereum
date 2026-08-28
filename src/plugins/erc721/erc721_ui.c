@@ -122,6 +122,11 @@ static void set_transfer_ui(ethQueryContractUI_t *msg, erc721_context_t *context
                 msg->result = ETH_PLUGIN_RESULT_ERROR;
             }
             break;
+        case 5:
+            // Requested by finalize only for a non-empty payload
+            strlcpy(msg->title, "Transfer With Data", msg->titleLength);
+            snprintf(msg->msg, msg->msgLength, "%u bytes", (unsigned) context->data_length);
+            break;
         default:
             PRINTF("Unsupported screen index %d\n", msg->screenIndex);
             msg->result = ETH_PLUGIN_RESULT_ERROR;

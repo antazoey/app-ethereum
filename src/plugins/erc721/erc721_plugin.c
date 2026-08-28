@@ -70,9 +70,15 @@ void handle_finalize_721(ethPluginFinalize_t *msg) {
     switch (context->selectorIndex) {
         case TRANSFER:
         case SAFE_TRANSFER:
-        case SAFE_TRANSFER_DATA:
             // NFT Owner, To, Collection Name, NFT Address, NFT ID
             msg->numScreens = 5;
+            break;
+        case SAFE_TRANSFER_DATA:
+            msg->numScreens = 5;
+            // +1 screen to surface the payload when present
+            if (context->data_length > 0) {
+                msg->numScreens++;
+            }
             break;
         case APPROVE:
             // Allow, To Manage Your, NFT Address, NFT ID. No calldata owner:
