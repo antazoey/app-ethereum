@@ -4,6 +4,7 @@
 #include "plugin_utils.h"
 #include "eth_plugin_internal.h"
 #include "eth_plugin_handler.h"
+#include "manage_asset_info.h"
 
 static const uint8_t ERC1155_APPROVE_FOR_ALL_SELECTOR[SELECTOR_SIZE] = {0xa2, 0x2c, 0xb4, 0x65};
 static const uint8_t ERC1155_SAFE_TRANSFER_SELECTOR[SELECTOR_SIZE] = {0xf2, 0x42, 0x43, 0x2a};
@@ -19,8 +20,9 @@ void handle_init_contract_1155(ethPluginInitContract_t *msg) {
     erc1155_context_t *context = (erc1155_context_t *) msg->pluginContext;
     explicit_bzero(context, sizeof(*context));
 
-    if (NO_NFT_METADATA) {
-        PRINTF("No NFT metadata when trying to sign!\n");
+    // Require metadata for the contract actually being called
+    if (get_asset_info_by_type_and_addr(ASSET_TYPE_NFT, msg->txContent->destination) == NULL) {
+        PRINTF("No NFT metadata for the called contract when trying to sign!\n");
         msg->result = ETH_PLUGIN_RESULT_ERROR;
         return;
     }
@@ -58,12 +60,8 @@ void handle_init_contract_1155(ethPluginInitContract_t *msg) {
 void handle_finalize_1155(ethPluginFinalize_t *msg) {
     erc1155_context_t *context = (erc1155_context_t *) msg->pluginContext;
 
-    if (context->selectorIndex != SAFE_BATCH_TRANSFER) {
-        msg->tokenLookup1 = msg->txContent->destination;
-    } else {
-        msg->tokenLookup1 = NULL;
-    }
-
+    // Every selector renders the collection metadata, so all request the lookup
+    msg->tokenLookup1 = msg->txContent->destination;
     msg->tokenLookup2 = NULL;
     switch (context->selectorIndex) {
         case SAFE_TRANSFER:

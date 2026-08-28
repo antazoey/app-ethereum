@@ -5,6 +5,7 @@
 #include "eth_plugin_internal.h"
 #include "eth_plugin_interface.h"
 #include "eth_plugin_handler.h"
+#include "manage_asset_info.h"
 
 static const uint8_t ERC721_APPROVE_SELECTOR[SELECTOR_SIZE] = {0x09, 0x5e, 0xa7, 0xb3};
 static const uint8_t ERC721_APPROVE_FOR_ALL_SELECTOR[SELECTOR_SIZE] = {0xa2, 0x2c, 0xb4, 0x65};
@@ -24,8 +25,9 @@ void handle_init_contract_721(ethPluginInitContract_t *msg) {
     erc721_context_t *context = (erc721_context_t *) msg->pluginContext;
     explicit_bzero(context, sizeof(*context));
 
-    if (NO_NFT_METADATA) {
-        PRINTF("No NFT metadata when trying to sign!\n");
+    // Require metadata for the contract actually being called
+    if (get_asset_info_by_type_and_addr(ASSET_TYPE_NFT, msg->txContent->destination) == NULL) {
+        PRINTF("No NFT metadata for the called contract when trying to sign!\n");
         msg->result = ETH_PLUGIN_RESULT_ERROR;
         return;
     }

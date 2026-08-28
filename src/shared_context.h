@@ -102,6 +102,14 @@ typedef struct tokenContext_t {
 
     uint8_t pluginStatus;
 
+    // Asset slots that the plugin's tokenLookup1/tokenLookup2 actually matched
+    // for this transaction, so the review renders the metadata that was looked
+    // up rather than whatever sits in a fixed slot position. Stored 1-based:
+    // the all-zero state left by reset_app_context() then reads as "no match"
+    // instead of as slot 0.
+    uint8_t pluginAssetSlot1;
+    uint8_t pluginAssetSlot2;
+
     // Chain ID the plugin registration was issued for. Populated from the
     // signed SET_PLUGIN payload so we can refuse to activate the plugin on a
     // transaction whose chain_id differs.

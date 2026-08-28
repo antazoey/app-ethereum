@@ -1,7 +1,7 @@
 /**
  * Fuzzing harness for the ERC721 internal plugin (NFT operations)
  *
- * Note: ERC721 plugin requires NFT metadata to be set up (NO_NFT_METADATA check)
+ * Note: ERC721 plugin requires NFT metadata matching txContent->destination
  * We populate tmpCtx.transactionContext.extraInfo[0] to bypass this check.
  *
  * The first byte of fuzz data selects which ERC721 selector to test:
@@ -72,19 +72,23 @@ static int fuzz_erc721_plugin(const uint8_t *data, size_t size) {
     data++;
     size--;
 
-    // Set up NFT metadata to bypass NO_NFT_METADATA check
-    // The check is: allzeroes(&(tmpCtx.transactionContext.extraInfo[0]), sizeof(extraInfo_t))
-    // We need to make this non-zero
-    tmpCtx.transactionContext.extraInfo[0].nft.collectionName[0] = 'F';
-    tmpCtx.transactionContext.extraInfo[0].nft.collectionName[1] = 'U';
-    tmpCtx.transactionContext.extraInfo[0].nft.collectionName[2] = 'Z';
-    tmpCtx.transactionContext.extraInfo[0].nft.collectionName[3] = 'Z';
-    tmpCtx.transactionContext.extraInfo[0].nft.collectionName[4] = '\0';
-
     // Initialize content from fuzzed data if available
     if (size >= sizeof(txContent_t)) {
         memcpy(&content, data, sizeof(txContent_t));
     }
+
+    // Provision NFT metadata for the contract this transaction targets. Plugin
+    // init requires a slot typed ASSET_TYPE_NFT whose address matches
+    // txContent->destination, so the address has to be copied after content has
+    // been filled from the fuzzed data.
+    strlcpy(tmpCtx.transactionContext.extraInfo[0].nft.collectionName,
+            "FUZZ",
+            sizeof(tmpCtx.transactionContext.extraInfo[0].nft.collectionName));
+    memcpy(tmpCtx.transactionContext.extraInfo[0].nft.contractAddress,
+           content.destination,
+           ADDRESS_LENGTH);
+    tmpCtx.transactionContext.assetSet[0] = true;
+    tmpCtx.transactionContext.assetType[0] = ASSET_TYPE_NFT;
 
     // Setup init contract with the selected valid selector
     init_contract.interfaceVersion = ETH_PLUGIN_INTERFACE_VERSION_LATEST;
