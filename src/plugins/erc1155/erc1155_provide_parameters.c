@@ -41,6 +41,8 @@ static void handle_safe_transfer(ethPluginProvideParameter_t *msg, erc1155_conte
 
     switch (context->next_param) {
         case FROM:
+            // Retain the owner, the account actually debited
+            copy_address(context->ownerAddress, msg->parameter, sizeof(context->ownerAddress));
             context->next_param = TO;
             break;
         case TO:
@@ -67,6 +69,8 @@ static void handle_batch_transfer(ethPluginProvideParameter_t *msg, erc1155_cont
 
     switch (context->next_param) {
         case FROM:
+            // Retain the owner, the account actually debited
+            copy_address(context->ownerAddress, msg->parameter, sizeof(context->ownerAddress));
             context->next_param = TO;
             break;
         case TO:

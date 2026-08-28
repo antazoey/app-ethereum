@@ -71,7 +71,12 @@ void handle_finalize_721(ethPluginFinalize_t *msg) {
         case TRANSFER:
         case SAFE_TRANSFER:
         case SAFE_TRANSFER_DATA:
+            // NFT Owner, To, Collection Name, NFT Address, NFT ID
+            msg->numScreens = 5;
+            break;
         case APPROVE:
+            // Allow, To Manage Your, NFT Address, NFT ID. No calldata owner:
+            // approve() only carries the operator and the token id.
             msg->numScreens = 4;
             break;
         case SET_APPROVAL_FOR_ALL:

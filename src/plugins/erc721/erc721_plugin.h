@@ -11,6 +11,9 @@ typedef struct erc721_context_t {
     uint8_t address[ADDRESS_LENGTH];
     uint8_t tokenId[INT256_LENGTH];
 
+    // Calldata `from`: the account being debited, not necessarily the signer
+    uint8_t ownerAddress[ADDRESS_LENGTH];
+
     bool approved;
 
     uint8_t next_param;

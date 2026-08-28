@@ -26,6 +26,8 @@ static void handle_transfer(ethPluginProvideParameter_t *msg,
                             bool strict) {
     switch (context->next_param) {
         case FROM:
+            // Retain the owner, the account actually debited
+            copy_address(context->ownerAddress, msg->parameter, sizeof(context->ownerAddress));
             context->next_param = TO;
             break;
         case TO:
