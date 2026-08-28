@@ -544,7 +544,9 @@ static bool ui_712_format_uint(const uint8_t *data, uint8_t length, bool first) 
     if (!first) {
         return false;
     }
-    convertUint256BE(data, length, &value256);
+    if (!convertUint256BE(data, length, &value256)) {
+        return false;
+    }
     tostring256(&value256, 10, strings.tmp.tmp, sizeof(strings.tmp.tmp));
     return true;
 }

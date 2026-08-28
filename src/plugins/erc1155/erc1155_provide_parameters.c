@@ -55,7 +55,10 @@ static void handle_safe_transfer(ethPluginProvideParameter_t *msg, erc1155_conte
             break;
         case VALUE:
             copy_parameter(new_value, msg->parameter, sizeof(new_value));
-            convertUint256BE(new_value, INT256_LENGTH, &context->value);
+            if (!convertUint256BE(new_value, INT256_LENGTH, &context->value)) {
+                msg->result = ETH_PLUGIN_RESULT_ERROR;
+                return;
+            }
             context->next_param = NONE;
             break;
         default:
@@ -161,7 +164,10 @@ static void handle_batch_transfer(ethPluginProvideParameter_t *msg, erc1155_cont
             if (context->array_index < ERC1155_BATCH_DISPLAY_MAX) {
                 memcpy(context->batch_values[context->array_index], msg->parameter, INT256_LENGTH);
             }
-            convertUint256BE(context->tokenId, sizeof(context->tokenId), &new_value);
+            if (!convertUint256BE(context->tokenId, sizeof(context->tokenId), &new_value)) {
+                msg->result = ETH_PLUGIN_RESULT_ERROR;
+                return;
+            }
             add256(&context->value, &new_value, &context->value);
             // Reject crafted batches whose per-id totals wrap uint256. With
             // the partial sum already stored in context->value, an overflow

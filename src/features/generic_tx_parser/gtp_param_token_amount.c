@@ -56,8 +56,7 @@ static bool handle_threshold(const tlv_data_t *data, s_param_token_amount_contex
     if (data->value.size > sizeof(uint256_t)) {
         return false;
     }
-    convertUint256BE(data->value.ptr, data->value.size, &context->param->threshold);
-    return true;
+    return convertUint256BE(data->value.ptr, data->value.size, &context->param->threshold);
 }
 
 static bool handle_above_threshold_msg(const tlv_data_t *data,
@@ -117,7 +116,9 @@ static bool process_token_amount(const s_param_token_amount *param,
         }
     }
 
-    convertUint256BE(value->ptr, value->length, &val256);
+    if (!convertUint256BE(value->ptr, value->length, &val256)) {
+        return false;
+    }
     if (!equal256(&param->threshold, &zero256) && gte256(&val256, &param->threshold)) {
         if (param->above_threshold_msg[0] != '\0') {
             snprintf(buf, buf_size, "%s %s", param->above_threshold_msg, ticker);

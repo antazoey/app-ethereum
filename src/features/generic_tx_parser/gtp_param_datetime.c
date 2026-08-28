@@ -71,7 +71,12 @@ bool format_param_datetime(const s_param_datetime *param, const char *name) {
                     }
                 }
             } else if (param->type == DT_BLOCKHEIGHT) {
-                convertUint256BE(collec.value[i].ptr, collec.value[i].length, &block_height);
+                if (!convertUint256BE(collec.value[i].ptr,
+                                      collec.value[i].length,
+                                      &block_height)) {
+                    ret = false;
+                    break;
+                }
                 if (!(ret = tostring256(&block_height, 10, buf, buf_size))) {
                     break;
                 }

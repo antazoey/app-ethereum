@@ -267,8 +267,13 @@ bool max_transaction_fee_to_string(const txInt256_t *BEGasPrice,
 
     PRINTF("Gas price %.*H\n", BEGasPrice->length, BEGasPrice->value);
     PRINTF("Gas limit %.*H\n", BEGasLimit->length, BEGasLimit->value);
-    convertUint256BE(BEGasPrice->value, BEGasPrice->length, &gasPrice);
-    convertUint256BE(BEGasLimit->value, BEGasLimit->length, &gasLimit);
+    // RLP encodes a zero value as an empty field; treat it as 0
+    if (((BEGasPrice->length > 0) &&
+         !convertUint256BE(BEGasPrice->value, BEGasPrice->length, &gasPrice)) ||
+        ((BEGasLimit->length > 0) &&
+         !convertUint256BE(BEGasLimit->value, BEGasLimit->length, &gasLimit))) {
+        return false;
+    }
     if (mul256(&gasPrice, &gasLimit, &rawFee) == false) {
         return false;
     }
