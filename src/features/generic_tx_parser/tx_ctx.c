@@ -285,13 +285,15 @@ bool tx_ctx_init(s_calldata *calldata,
             calldata_info->processed = true;
         }
     } else {
-        // as default, copy value from last tx context
-        const s_tx_ctx *tmp = g_tx_ctx_list;
-        while (((const flist_node_t *) tmp)->next != NULL) {
-            tmp = (const s_tx_ctx *) ((const flist_node_t *) tmp)->next;
+        // Inherit defaults from the logical parent (the context whose field is
+        // being formatted), not from the list tail: with multiple queued siblings
+        // the tail can be an unrelated earlier child.
+        if (g_tx_ctx_current == NULL) {
+            APP_MEM_FREE(node);
+            return false;
         }
-        memcpy(node->from, tmp->from, sizeof(node->from));
-        node->chain_id = tmp->chain_id;
+        memcpy(node->from, g_tx_ctx_current->from, sizeof(node->from));
+        node->chain_id = g_tx_ctx_current->chain_id;
     }
 
     if (from != NULL) {
