@@ -444,6 +444,11 @@ __attribute__((noinline)) static uint16_t finalize_parsing_helper(const txContex
             PRINTF("Plugin swap_with_calldata fell back for UI with success\n");
             // We are not bling signing, the data has been validated by the plugin
             tmpContent.txContent.dataPresent = false;
+        } else {
+            // A plugin that fell back produced no UI items; hand the transaction
+            // to the standard review path instead of an empty plugin review
+            PRINTF("Plugin fell back, reverting to the generic transaction review\n");
+            pluginType = PLUGIN_TYPE_NONE;
         }
     }
 
