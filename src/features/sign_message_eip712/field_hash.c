@@ -230,6 +230,7 @@ static bool field_hash_finalize(const s_struct_712_field *field_ptr,
             return false;
         }
     }
+    ui_712_check_field_filtering();
     path_advance(true);
     fh->state = FHS_IDLE;
     ui_712_finalize_field();

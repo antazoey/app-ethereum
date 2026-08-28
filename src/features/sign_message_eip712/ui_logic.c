@@ -77,6 +77,7 @@ typedef struct {
     s_ui_712_pair *ui_pairs;
     s_eip712_calldata_info *calldata_info;
     uint8_t calldata_index;
+    bool filtering_broken;
 } t_ui_context;
 
 static t_ui_context *ui_ctx = NULL;
@@ -156,6 +157,41 @@ void ui_712_finalize_field(void) {
         ui_712_next_field();
     }
     ui_712_field_flags_reset();
+}
+
+/**
+ * Check filter enforcement for the field about to be finalized (path still points at it).
+ *
+ * In full filtering mode, paths are only identified by their schema form (".[]" for array
+ * elements), so every occurrence of an array element shares one registered filter path.
+ * Once a path is registered, every further occurrence must come with a freshly verified
+ * filter (which sets the SHOWN flag); otherwise later array elements would be signed
+ * without ever being displayed.
+ */
+void ui_712_check_field_filtering(void) {
+    uint32_t path_crc;
+    const s_filter_crc *crc_node;
+
+    if (ui_ctx->filtering_mode != EIP712_FILTERING_FULL) {
+        return;
+    }
+    if (ui_ctx->filters_crc == NULL) {
+        // no path registered yet (just-in-time discovery for the first occurrence)
+        return;
+    }
+    if (!filtering_compute_current_path_crc(&path_crc)) {
+        return;
+    }
+    for (crc_node = ui_ctx->filters_crc; crc_node != NULL;
+         crc_node = (s_filter_crc *) ((flist_node_t *) crc_node)->next) {
+        if (crc_node->value == path_crc) {
+            if (!(ui_ctx->field_flags & UI_712_FIELD_SHOWN)) {
+                PRINTF("EIP-712: filtered path 0x%x occurrence without filter!\n", path_crc);
+                ui_ctx->filtering_broken = true;
+            }
+            return;
+        }
+    }
 }
 
 /**
@@ -1193,6 +1229,15 @@ uint8_t ui_712_remaining_filters(void) {
 
 bool ui_712_message_info_received(void) {
     return ui_ctx->message_info_received;
+}
+
+/**
+ * Whether a registered filtered path was consumed without a fresh filter
+ *
+ * @return whether the filtering accounting was violated
+ */
+bool ui_712_filtering_broken(void) {
+    return ui_ctx->filtering_broken;
 }
 
 /**

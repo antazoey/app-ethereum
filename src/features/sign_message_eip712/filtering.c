@@ -38,7 +38,7 @@
  * @param[in] discarded if the filter targets a field that does not exist (within an empty array)
  * @param[out] path_crc pointer to the CRC of the filter path
  */
-static bool hash_filtering_path(cx_hash_t *hash_ctx, bool discarded, uint32_t *path_crc) {
+static bool hash_filtering_path_internal(cx_hash_t *hash_ctx, bool discarded, uint32_t *path_crc) {
     const s_struct_712_field *field_ptr;
     const char *key;
     const char *path;
@@ -376,7 +376,7 @@ bool filtering_calldata_spender(const uint8_t *payload,
     if (!sig_verif_start(&hash_ctx, FILT_MAGIC_CALLDATA_SPENDER)) {
         return false;
     }
-    if (!hash_filtering_path((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
+    if (!hash_filtering_path_internal((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
         return false;
     }
     hash_byte(index, (cx_hash_t *) &hash_ctx);
@@ -438,7 +438,7 @@ bool filtering_calldata_amount(const uint8_t *payload,
     if (!sig_verif_start(&hash_ctx, FILT_MAGIC_CALLDATA_AMOUNT)) {
         return false;
     }
-    if (!hash_filtering_path((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
+    if (!hash_filtering_path_internal((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
         return false;
     }
     hash_byte(index, (cx_hash_t *) &hash_ctx);
@@ -500,7 +500,7 @@ bool filtering_calldata_selector(const uint8_t *payload,
     if (!sig_verif_start(&hash_ctx, FILT_MAGIC_CALLDATA_SELECTOR)) {
         return false;
     }
-    if (!hash_filtering_path((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
+    if (!hash_filtering_path_internal((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
         return false;
     }
     hash_byte(index, (cx_hash_t *) &hash_ctx);
@@ -562,7 +562,7 @@ bool filtering_calldata_chain_id(const uint8_t *payload,
     if (!sig_verif_start(&hash_ctx, FILT_MAGIC_CALLDATA_CHAIN_ID)) {
         return false;
     }
-    if (!hash_filtering_path((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
+    if (!hash_filtering_path_internal((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
         return false;
     }
     hash_byte(index, (cx_hash_t *) &hash_ctx);
@@ -624,7 +624,7 @@ bool filtering_calldata_callee(const uint8_t *payload,
     if (!sig_verif_start(&hash_ctx, FILT_MAGIC_CALLDATA_CALLEE)) {
         return false;
     }
-    if (!hash_filtering_path((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
+    if (!hash_filtering_path_internal((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
         return false;
     }
     hash_byte(index, (cx_hash_t *) &hash_ctx);
@@ -686,7 +686,7 @@ bool filtering_calldata_value(const uint8_t *payload,
     if (!sig_verif_start(&hash_ctx, FILT_MAGIC_CALLDATA_VALUE)) {
         return false;
     }
-    if (!hash_filtering_path((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
+    if (!hash_filtering_path_internal((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
         return false;
     }
     hash_byte(index, (cx_hash_t *) &hash_ctx);
@@ -962,7 +962,7 @@ bool filtering_trusted_name(const uint8_t *payload,
     if (!sig_verif_start(&hash_ctx, FILT_MAGIC_TRUSTED_NAME)) {
         return false;
     }
-    if (!hash_filtering_path((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
+    if (!hash_filtering_path_internal((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
         return false;
     }
     hash_nbytes((uint8_t *) name, sizeof(char) * name_len, (cx_hash_t *) &hash_ctx);
@@ -1032,7 +1032,7 @@ bool filtering_date_time(const uint8_t *payload,
     if (!sig_verif_start(&hash_ctx, FILT_MAGIC_DATETIME)) {
         return false;
     }
-    if (!hash_filtering_path((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
+    if (!hash_filtering_path_internal((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
         return false;
     }
     hash_nbytes((uint8_t *) name, sizeof(char) * name_len, (cx_hash_t *) &hash_ctx);
@@ -1094,7 +1094,7 @@ bool filtering_amount_join_token(const uint8_t *payload,
     if (!sig_verif_start(&hash_ctx, FILT_MAGIC_AMOUNT_JOIN_TOKEN)) {
         return false;
     }
-    if (!hash_filtering_path((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
+    if (!hash_filtering_path_internal((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
         return false;
     }
     hash_byte(token_idx, (cx_hash_t *) &hash_ctx);
@@ -1168,7 +1168,7 @@ bool filtering_amount_join_value(const uint8_t *payload,
     if (!sig_verif_start(&hash_ctx, FILT_MAGIC_AMOUNT_JOIN_VALUE)) {
         return false;
     }
-    if (!hash_filtering_path((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
+    if (!hash_filtering_path_internal((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
         return false;
     }
     hash_nbytes((uint8_t *) name, sizeof(char) * name_len, (cx_hash_t *) &hash_ctx);
@@ -1258,7 +1258,7 @@ bool filtering_raw_field(const uint8_t *payload,
     if (!sig_verif_start(&hash_ctx, FILT_MAGIC_RAW_FIELD)) {
         return false;
     }
-    if (!hash_filtering_path((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
+    if (!hash_filtering_path_internal((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
         return false;
     }
     hash_nbytes((uint8_t *) name, sizeof(char) * name_len, (cx_hash_t *) &hash_ctx);
@@ -1274,4 +1274,20 @@ bool filtering_raw_field(const uint8_t *payload,
         ui_712_flag_field(true, name_len > 0, false, false, false, false);
     }
     return true;
+}
+
+/**
+ * Compute the CRC of the path the current field is at.
+ *
+ * @param[out] path_crc pointer to the CRC of the filter path
+ * @return whether it was successful or not
+ */
+bool filtering_compute_current_path_crc(uint32_t *path_crc) {
+    cx_sha256_t hash_ctx;
+
+    if (!sig_verif_start(&hash_ctx, 0)) {
+        return false;
+    }
+    // reuse the path hashing; the magic byte does not matter for a CRC
+    return hash_filtering_path_internal((cx_hash_t *) &hash_ctx, false, path_crc);
 }

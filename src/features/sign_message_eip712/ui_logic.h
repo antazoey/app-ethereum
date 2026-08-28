@@ -85,6 +85,8 @@ void ui_712_flag_field(bool show,
                        bool calldata);
 void ui_712_field_flags_reset(void);
 void ui_712_finalize_field(void);
+void ui_712_check_field_filtering(void);
+bool ui_712_filtering_broken(void);
 void ui_712_set_filtering_mode(e_eip712_filtering_mode mode);
 e_eip712_filtering_mode ui_712_get_filtering_mode(void);
 void ui_712_set_filters_count(uint8_t count);
