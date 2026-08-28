@@ -44,11 +44,23 @@ bool format_param_enum(const s_param_enum *param, const char *name) {
     uint8_t value;
     const uint8_t *selector;
 
+    // Enum entries are 8-bit: the schema must declare an 8-bit unsigned value
+    if ((param->value.type_family != TF_UINT) || (param->value.type_size != sizeof(uint8_t))) {
+        return false;
+    }
+
     if ((ret = value_get(&param->value, &collec))) {
         if (get_current_tx_info() == NULL) return false;
         chain_id = get_current_tx_info()->chain_id;
         for (int i = 0; i < collec.size; ++i) {
             if (collec.value[i].length == 0) {
+                ret = false;
+                break;
+            }
+            // The calldata word must canonically fit in 8 bits; silently truncating
+            // the high bytes would display a label for a different value (e.g. 256
+            // shown as the label of 0).
+            if (!allzeroes(collec.value[i].ptr, collec.value[i].length - 1)) {
                 ret = false;
                 break;
             }
