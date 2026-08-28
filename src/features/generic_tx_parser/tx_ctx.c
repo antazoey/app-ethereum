@@ -201,19 +201,30 @@ bool find_matching_tx_ctx(const uint8_t *contract_addr,
                           const uint8_t *selector,
                           const uint64_t *chain_id) {
     const uint8_t *proxy_implem;
+    s_tx_ctx *expected = NULL;
 
+    // Only the next undescribed context in execution order is eligible, so the
+    // host cannot reorder the review vs the actual call sequence. Empty
+    // transactions have no TX_INFO and are handled by process_empty_txs_*().
     for (s_tx_ctx *tmp = g_tx_ctx_list; tmp != NULL;
          tmp = (s_tx_ctx *) ((flist_node_t *) tmp)->next) {
-        proxy_implem = get_implem_contract(chain_id, tmp->to, selector);
-        if ((memcmp((proxy_implem != NULL) ? proxy_implem : tmp->to,
-                    contract_addr,
-                    ADDRESS_LENGTH) == 0) &&
-            ((tmp->calldata != NULL) &&
-             (memcmp(selector, tmp->calldata->selector, CALLDATA_SELECTOR_SIZE) == 0)) &&
-            (*chain_id == tmp->chain_id)) {
-            g_tx_ctx_current = tmp;
-            return true;
+        if ((tmp->tx_info == NULL) && (tmp->calldata != NULL)) {
+            expected = tmp;
+            break;
         }
+    }
+    if (expected == NULL) {
+        return false;
+    }
+
+    proxy_implem = get_implem_contract(chain_id, expected->to, selector);
+    if ((memcmp((proxy_implem != NULL) ? proxy_implem : expected->to,
+                contract_addr,
+                ADDRESS_LENGTH) == 0) &&
+        (memcmp(selector, expected->calldata->selector, CALLDATA_SELECTOR_SIZE) == 0) &&
+        (*chain_id == expected->chain_id)) {
+        g_tx_ctx_current = expected;
+        return true;
     }
     return false;
 }
