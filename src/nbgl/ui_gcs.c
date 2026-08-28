@@ -400,6 +400,7 @@ bool ui_gcs(void) {
     size_t tmp_buf_size = sizeof(strings.tmp.tmp);
     const s_field_table_entry *field;
     bool show_network;
+    bool show_root_value;
     nbgl_contentValueExt_t *ext = NULL;
     nbgl_contentInfoList_t *infolist = NULL;
     size_t nbPairs = 0;
@@ -434,6 +435,12 @@ bool ui_gcs(void) {
     table_size = field_table_size();
     // Contract info
     nbPairs += 1;
+    // Root transaction native value, unless a descriptor field already shows it (CP_VALUE)
+    show_root_value = !gcs_is_root_value_shown() && !allzeroes(tmpContent.txContent.value.value,
+                                                               tmpContent.txContent.value.length);
+    if (show_root_value) {
+        nbPairs += 1;
+    }
     // Batch transactions
     if (txContext.batch_nb_tx > 1) {
         nbPairs += txContext.batch_nb_tx;  // one page per sub-tx
@@ -527,6 +534,26 @@ bool ui_gcs(void) {
             // End of batch transaction : start next info on full page
             g_pairs[pair].forcePageStart = true;
         }
+    }
+
+    // Native value of the root transaction, taken from the RLP content (device-side
+    // source of truth) so the host cannot hide it by omitting it from the metadata.
+    if (show_root_value) {
+        uint64_t chain_id = get_tx_chain_id();
+        const char *ticker = get_displayable_ticker(&chain_id, chainConfig, true);
+
+        g_pairs[pair].item = APP_MEM_STRDUP("Amount");
+        if (!amountToString(tmpContent.txContent.value.value,
+                            tmpContent.txContent.value.length,
+                            WEI_TO_ETHER,
+                            ticker,
+                            tmp_buf,
+                            tmp_buf_size)) {
+            return false;
+        }
+        g_pairs[pair].value = APP_MEM_STRDUP(tmp_buf);
+        index_allocated[pair] = true;
+        pair++;
     }
 
     if (show_network) {

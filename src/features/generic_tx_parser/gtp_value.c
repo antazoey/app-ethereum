@@ -103,6 +103,11 @@ bool value_get(const s_value *value, s_parsed_value_collection *collection) {
                     }
                     collection->value[0].length = INT256_LENGTH;
                     collection->size = 1;
+                    if (tx_ctx_is_root()) {
+                        // The descriptor already shows the root native value; the GCS
+                        // review must not add its own duplicate row for it.
+                        gcs_set_root_value_shown();
+                    }
                     break;
 
                 case CP_CHAIN_ID:

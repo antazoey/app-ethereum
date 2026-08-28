@@ -13,6 +13,8 @@
 static s_tx_ctx *g_tx_ctx_list = NULL;
 static s_tx_ctx *g_tx_ctx_current = NULL;
 s_calldata *g_parked_calldata = NULL;
+// Whether a descriptor field already displays the root transaction native value (CP_VALUE)
+static bool g_root_value_shown = false;
 
 bool tx_ctx_is_root(void) {
     return (g_tx_ctx_list != NULL) && (g_tx_ctx_current == g_tx_ctx_list);
@@ -315,10 +317,19 @@ bool tx_ctx_init(s_calldata *calldata,
     return true;
 }
 
+void gcs_set_root_value_shown(void) {
+    g_root_value_shown = true;
+}
+
+bool gcs_is_root_value_shown(void) {
+    return g_root_value_shown;
+}
+
 void gcs_cleanup(void) {
     ui_gcs_cleanup();
     field_table_cleanup();
     tx_ctx_cleanup();
+    g_root_value_shown = false;
     // just in case
     if (g_parked_calldata != NULL) {
         calldata_delete(g_parked_calldata);
