@@ -120,8 +120,24 @@ static void set_transfer_ui(ethQueryContractUI_t *msg, erc721_context_t *context
     }
 }
 
+// The metadata rendered must describe the called contract; fail closed on any
+// mismatch instead of showing a stale extraInfo slot
+static bool metadata_matches_destination(const ethQueryContractUI_t *msg) {
+    if ((msg->item1 == NULL) || (msg->txContent == NULL)) {
+        return false;
+    }
+    return memcmp(msg->item1->nft.contractAddress, msg->txContent->destination, ADDRESS_LENGTH) ==
+           0;
+}
+
 void handle_query_contract_ui_721(ethQueryContractUI_t *msg) {
     erc721_context_t *context = (erc721_context_t *) msg->pluginContext;
+
+    if (!metadata_matches_destination(msg)) {
+        PRINTF("NFT metadata does not describe the called contract!\n");
+        msg->result = ETH_PLUGIN_RESULT_ERROR;
+        return;
+    }
 
     msg->result = ETH_PLUGIN_RESULT_OK;
     switch (context->selectorIndex) {
