@@ -366,6 +366,37 @@ bool set_struct_field(uint8_t length, const uint8_t *data) {
             goto cleanup;
         }
     }
+
+    // Validate the type/size combination: a fixed-size-bytes without a size would
+    // serialize as plain "bytes" (identical to dynamic bytes) in the schema/type
+    // hashes while being hashed as a static value, so a host could make the review
+    // show keccak256(X) while the signature commits to X.
+    switch (new_field->type) {
+        case TYPE_SOL_INT:
+        case TYPE_SOL_UINT:
+        case TYPE_SOL_BYTES_FIX:
+            if (!new_field->type_has_size || (new_field->type_size == 0) ||
+                (new_field->type_size > 32)) {
+                apdu_response_code = SWO_INCORRECT_DATA;
+                goto cleanup;
+            }
+            break;
+        case TYPE_SOL_ADDRESS:
+        case TYPE_SOL_BOOL:
+        case TYPE_SOL_STRING:
+        case TYPE_SOL_BYTES_DYN:
+            if (new_field->type_has_size) {
+                apdu_response_code = SWO_INCORRECT_DATA;
+                goto cleanup;
+            }
+            break;
+        case TYPE_CUSTOM:
+            // typename handled above, mutually exclusive with a type size
+            break;
+        default:
+            apdu_response_code = SWO_INCORRECT_DATA;
+            goto cleanup;
+    }
     if (new_field->type_is_array) {
         if (set_struct_field_array(new_field, data, &data_idx, length) == false) {
             goto cleanup;
