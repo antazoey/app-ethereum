@@ -8,6 +8,8 @@
 #include "typed_data.h"
 #include "path.h"
 #include "ui_logic.h"
+#include "shared_context.h"  // tmpCtx
+#include "common_utils.h"    // allzeroes
 #include "filtering.h"
 #include "os_pki.h"
 #include "trusted_name.h"
@@ -198,6 +200,15 @@ bool filtering_message_info(const uint8_t *payload, uint8_t length) {
     uint8_t offset = 0;
 
     if (path_get_root_type() != ROOT_DOMAIN) {
+        apdu_response_code = SWO_COMMAND_NOT_ALLOWED;
+        return false;
+    }
+    // The trusted signature binds the displayed name to the domain chain ID and
+    // contract, so they must be final: require the domain traversal to be complete
+    // (its hash finalized) and the message root not started yet.
+    if (allzeroes(tmpCtx.messageSigningContext712.domainHash,
+                  sizeof(tmpCtx.messageSigningContext712.domainHash))) {
+        PRINTF("EIP-712 message info with incomplete domain\n");
         apdu_response_code = SWO_COMMAND_NOT_ALLOWED;
         return false;
     }
