@@ -86,6 +86,25 @@ const s_struct_712 *get_structn(const char *name, uint8_t length) {
 }
 
 /**
+ * Validate a schema name (struct, type or field name).
+ *
+ * Names are embedded verbatim into the JSON-like schema hash preimage, so
+ * characters that can alter the JSON structure or its parsing would let a host
+ * craft distinct schemas whose reconstructed JSON collides. EIP-712 itself does
+ * not constrain the charset; this is a Ledger-side hardening choice.
+ */
+static bool is_valid_identifier(const uint8_t *name, uint8_t length) {
+    for (uint8_t i = 0; i < length; ++i) {
+        // '"' and '\' break the schema-hash JSON reconstruction; '.' and NUL
+        // break the dot-joined filter path identity
+        if ((name[i] == '"') || (name[i] == '\\') || (name[i] == '.') || (name[i] == '\0')) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/**
  * Set struct name
  *
  * @param[in] length name length
@@ -95,7 +114,7 @@ const s_struct_712 *get_structn(const char *name, uint8_t length) {
 bool set_struct_name(uint8_t length, const uint8_t *name) {
     s_struct_712 *new_struct;
 
-    if (name == NULL) {
+    if ((name == NULL) || !is_valid_identifier(name, length)) {
         apdu_response_code = SWO_INCORRECT_DATA;
         return false;
     }
@@ -167,6 +186,10 @@ static bool set_struct_field_custom_typename(s_struct_712_field *field,
     // copy name
     if ((*data_idx + typename_len) > length)  // check buffer bound
     {
+        apdu_response_code = SWO_INCORRECT_DATA;
+        return false;
+    }
+    if (!is_valid_identifier(&data[*data_idx], typename_len)) {
         apdu_response_code = SWO_INCORRECT_DATA;
         return false;
     }
@@ -275,6 +298,10 @@ static bool set_struct_field_keyname(s_struct_712_field *field,
     // copy name
     if ((*data_idx + keyname_len) > length)  // check buffer bound
     {
+        apdu_response_code = SWO_INCORRECT_DATA;
+        return false;
+    }
+    if (!is_valid_identifier(&data[*data_idx], keyname_len)) {
         apdu_response_code = SWO_INCORRECT_DATA;
         return false;
     }
