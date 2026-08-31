@@ -205,6 +205,20 @@ uint16_t handle_eip712_filtering(uint8_t p1,
     if ((p2 != P2_FILT_ACTIVATE) && (ui_712_get_filtering_mode() != EIP712_FILTERING_FULL)) {
         return SWO_SUCCESS;
     }
+    // A non-discarded filter targets the field the path currently points to. If that
+    // field is an array whose levels were not yet instantiated by P2_IMPL_ARRAY
+    // commands, the filter would install its label/flags onto whatever comes next —
+    // including the field following an empty array.
+    if ((p2 > P2_FILT_MESSAGE_INFO) && (p1 != P1_DISCARDED)) {
+        const s_struct_712_field *field_ptr = path_get_field();
+        if ((field_ptr != NULL) && field_ptr->type_is_array &&
+            (field_ptr->array_level_count != path_get_current_field_array_depth_count())) {
+            PRINTF("EIP-712 filter for an uninstantiated array field\n");
+            apdu_response_code = SWO_INCORRECT_DATA;
+            apdu_reply(false);
+            return apdu_response_code;
+        }
+    }
     switch (p2) {
         case P2_FILT_ACTIVATE:
             if (!N_storage.verbose_eip712) {
