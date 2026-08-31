@@ -55,6 +55,7 @@ static const uint8_t *field_hash_prepare(const s_struct_712_field *field_ptr,
     fh->remaining_size = read_u16_be(data, 0);
     data += sizeof(uint16_t);
     *data_length -= sizeof(uint16_t);
+    fh->chunked = (fh->remaining_size != *data_length);
     fh->state = FHS_WAITING_FOR_MORE;
     if (IS_DYN(field_ptr->type)) {
         if (cx_keccak_init_no_throw(&global_sha3, 256) != CX_OK) {
@@ -178,8 +179,11 @@ static bool field_hash_domain_special_fields(const s_struct_712_field *field_ptr
                 }
                 break;
             case TYPE_SOL_STRING:
-                // hardcoded check for their non-standard implementation
-                if ((data_length != strlen(ethermint_vc)) ||
+                // hardcoded check for their non-standard implementation; this
+                // function only sees the final chunk of a multi-chunk value, so a
+                // chunked string could end with "cosmos" while the signed value
+                // contains an attacker-chosen prefix.
+                if (fh->chunked || (data_length != strlen(ethermint_vc)) ||
                     (strncmp((char *) data, ethermint_vc, data_length) != 0)) {
                     apdu_response_code = SWO_INCORRECT_DATA;
                     PRINTF("Error: non standard verifyingContract\n");

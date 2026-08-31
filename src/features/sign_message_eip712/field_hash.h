@@ -10,6 +10,7 @@ typedef enum { FHS_IDLE, FHS_WAITING_FOR_MORE } e_field_hashing_state;
 typedef struct {
     uint16_t remaining_size;
     uint8_t state;  // e_field_hashing_state
+    bool chunked;   // value spans multiple APDU chunks
 } s_field_hashing;
 
 bool field_hash_init(void);
