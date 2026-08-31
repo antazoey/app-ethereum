@@ -293,6 +293,7 @@ uint16_t handle_eip712_filtering(uint8_t p1,
  */
 uint16_t handle_eip712_sign(const uint8_t *cdata, uint8_t length, uint32_t *flags) {
     bool ret = false;
+    bip32_path_t bip32;
 
     if (eip712_context == NULL) {
         apdu_response_code = SWO_COMMAND_NOT_ALLOWED;
@@ -312,9 +313,14 @@ uint16_t handle_eip712_sign(const uint8_t *cdata, uint8_t length, uint32_t *flag
     } else if (!all_calldata_info_processed() || (get_tx_ctx_count() != 0)) {
         PRINTF("Unprocessed calldata\n");
         apdu_response_code = SWO_REFERENCED_DATA_NOT_FOUND;
-    } else if (parseBip32(cdata, &length, &tmpCtx.messageSigningContext.bip32) == NULL) {
+    } else if (parseBip32(cdata, &length, &bip32) == NULL) {
         apdu_response_code = SWO_INCORRECT_DATA;
+    } else if (!eip712_sign_claim()) {
+        // The sign command is single-use: claimed before any mutation of tmpCtx,
+        // a replay while the review is on screen lands here.
+        apdu_response_code = SWO_COMMAND_NOT_ALLOWED;
     } else {
+        tmpCtx.messageSigningContext.bip32 = bip32;
         ret = true;
 #ifndef SCREEN_SIZE_WALLET
         if (!N_storage.verbose_eip712 && (ui_712_get_filtering_mode() == EIP712_FILTERING_BASIC)) {
