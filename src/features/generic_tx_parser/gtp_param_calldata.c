@@ -105,7 +105,9 @@ static bool process_nested_calldata(const s_param_calldata *param,
         chain_id_value = read_u64_be(chain_id_buf, 0);
     }
 
-    if (calldata->length > 0) {
+    // A zero-argument nested call is a real call when the selector is provided
+    // separately: the calldata context must exist so its TX_INFO can match.
+    if ((calldata->length > 0) || param->has_selector) {
         if (param->has_selector) {
             buf_shrink_expand(selector->ptr, selector->length, selector_buf, sizeof(selector_buf));
             calldata_buf = calldata->ptr;
@@ -123,7 +125,7 @@ static bool process_nested_calldata(const s_param_calldata *param,
             return false;
         }
         if (!calldata_append(new_calldata, calldata_buf, calldata_length)) {
-            APP_MEM_FREE(new_calldata);
+            calldata_delete(new_calldata);
             return false;
         }
     }
