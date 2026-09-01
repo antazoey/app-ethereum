@@ -61,6 +61,15 @@ bool format_param_datetime(const s_param_datetime *param, const char *name) {
                     ismaxint((uint8_t *) collec.value[i].ptr, collec.value[i].length)) {
                     snprintf(buf, buf_size, "Unlimited");
                 } else {
+                    // The timestamp is decoded from the low 8 bytes: reject values
+                    // with non-zero higher bytes instead of silently truncating
+                    // them to a different displayed date.
+                    if ((collec.value[i].length > sizeof(time_buf)) &&
+                        !allzeroes(collec.value[i].ptr,
+                                   collec.value[i].length - sizeof(time_buf))) {
+                        ret = false;
+                        break;
+                    }
                     buf_shrink_expand(collec.value[i].ptr,
                                       collec.value[i].length,
                                       time_buf,
