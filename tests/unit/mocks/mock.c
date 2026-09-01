@@ -184,3 +184,6 @@ bool tx_ctx_is_root(void) {
 
 void gcs_set_root_value_shown(void) {
 }
+
+void gcs_set_root_from_shown(void) {
+}

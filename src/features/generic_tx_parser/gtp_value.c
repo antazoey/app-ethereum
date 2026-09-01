@@ -87,6 +87,11 @@ bool value_get(const s_value *value, s_parsed_value_collection *collection) {
                     }
                     collection->value[0].length = ADDRESS_LENGTH;
                     collection->size = 1;
+                    if (tx_ctx_is_root()) {
+                        // The descriptor already shows the root sender; the GCS
+                        // review must not add its own duplicate row for it.
+                        gcs_set_root_from_shown();
+                    }
                     break;
 
                 case CP_TO:

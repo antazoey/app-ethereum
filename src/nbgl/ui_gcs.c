@@ -401,6 +401,7 @@ bool ui_gcs(void) {
     const s_field_table_entry *field;
     bool show_network;
     bool show_root_value;
+    bool show_root_from;
     nbgl_contentValueExt_t *ext = NULL;
     nbgl_contentInfoList_t *infolist = NULL;
     size_t nbPairs = 0;
@@ -433,6 +434,11 @@ bool ui_gcs(void) {
 
     // Get the number of TX fields to display
     table_size = field_table_size();
+    // Sender account, unless a descriptor field already shows it (CP_FROM)
+    show_root_from = !gcs_is_root_from_shown();
+    if (show_root_from) {
+        nbPairs += 1;
+    }
     // Contract info
     nbPairs += 1;
     // Root transaction native value, unless a descriptor field already shows it (CP_VALUE)
@@ -499,6 +505,27 @@ bool ui_gcs(void) {
     }
     g_pairs[pair].aliasValue = true;
     pair++;
+
+    // Sender account, right after the clickable contract info — the BIP32 path
+    // comes from the host, so the user must be able to verify which account signs.
+    // Format from the tx context (strings.common.fromAddress shares its memory
+    // with strings.tmp.tmp, already clobbered by the title above).
+    if (show_root_from) {
+        const uint8_t *from = get_current_tx_from();
+
+        if ((from == NULL) ||
+            !getEthDisplayableAddress(from, tmp_buf, tmp_buf_size, chainConfig->chainId)) {
+            PRINTF("Error: no sender address!\n");
+            return false;
+        }
+        index_allocated[pair] = true;
+        g_pairs[pair].item = APP_MEM_STRDUP("From");
+        g_pairs[pair].value = APP_MEM_STRDUP(tmp_buf);
+        if ((g_pairs[pair].item == NULL) || (g_pairs[pair].value == NULL)) {
+            return false;
+        }
+        pair++;
+    }
 
     // TX fields
     for (size_t i = 0; i < table_size; ++i) {

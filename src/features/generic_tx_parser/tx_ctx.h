@@ -51,3 +51,5 @@ bool tx_ctx_init(s_calldata *calldata,
 void gcs_cleanup(void);
 void gcs_set_root_value_shown(void);
 bool gcs_is_root_value_shown(void);
+void gcs_set_root_from_shown(void);
+bool gcs_is_root_from_shown(void);
