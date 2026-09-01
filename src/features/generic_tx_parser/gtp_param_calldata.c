@@ -101,6 +101,15 @@ static bool process_nested_calldata(const s_param_calldata *param,
     uint8_t chain_id_buf[sizeof(chain_id_value)];
 
     if (param->has_chain_id) {
+        // The chain ID is a uint64: reject values with non-zero high bytes instead
+        // of silently truncating them (the full word is signed, the truncated one
+        // would drive the displayed network context).
+        if (chain_id->length > sizeof(chain_id_buf)) {
+            if (!allzeroes(chain_id->ptr, chain_id->length - sizeof(chain_id_buf))) {
+                PRINTF("Error: chain ID too big\n");
+                return false;
+            }
+        }
         buf_shrink_expand(chain_id->ptr, chain_id->length, chain_id_buf, sizeof(chain_id_buf));
         chain_id_value = read_u64_be(chain_id_buf, 0);
     }
