@@ -931,6 +931,13 @@ static bool update_calldata_chain_id(const uint8_t *data,
 
     if (calldata_info->chain_id_state != CALLDATA_INFO_PARAM_UNSET) return false;
     if (!last) return false;
+    // The chain ID is a uint64: reject values with non-zero high bytes instead of
+    // silently truncating them (the full word is hashed, the truncated one would
+    // drive the displayed network context).
+    if ((length > sizeof(chain_id_buf)) && !allzeroes(data, length - sizeof(chain_id_buf))) {
+        PRINTF("Error: chain ID too big\n");
+        return false;
+    }
     buf_shrink_expand(data, length, chain_id_buf, sizeof(chain_id_buf));
     calldata_info->chain_id = read_u64_be(chain_id_buf, 0);
     calldata_info->chain_id_state = CALLDATA_INFO_PARAM_SET;
