@@ -109,7 +109,8 @@ static bool process_token_amount(const s_param_token_amount *param,
             decimals = WEI_TO_ETHER;
         } else {
             if ((token_def = (const tokenDefinition_t *)
-                     get_asset_info_by_type_and_addr(ASSET_TYPE_ERC20, addr_buf)) != NULL) {
+                     get_asset_info_by_type_and_addr(ASSET_TYPE_ERC20, addr_buf, chain_id)) !=
+                NULL) {
                 ticker = token_def->ticker;
                 decimals = token_def->decimals;
             }

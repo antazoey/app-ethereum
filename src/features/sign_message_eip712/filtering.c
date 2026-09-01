@@ -1180,9 +1180,17 @@ bool filtering_amount_join_value(const uint8_t *payload,
     // Handling
     if (discarded) return true;
     if (token_idx == TOKEN_IDX_ADDR_IN_DOMAIN) {
-        // Permit (ERC-2612): resolving the verifyingContract to a token slot
-        int resolved_idx =
-            get_asset_index_by_type_and_addr(ASSET_TYPE_ERC20, eip712_context->contract_addr);
+        // Permit (ERC-2612): resolving the verifyingContract to a token slot.
+        // Bound to the domain's chainId, so a domain that carries none (all
+        // real chain IDs are > 0) has nothing to bind the metadata to and is
+        // refused rather than resolved against some other chain's token.
+        if (eip712_context->chain_id == 0) {
+            PRINTF("ERROR: no chainId in the domain to bind the token metadata to!\n");
+            return false;
+        }
+        int resolved_idx = get_asset_index_by_type_and_addr(ASSET_TYPE_ERC20,
+                                                            eip712_context->contract_addr,
+                                                            eip712_context->chain_id);
 
         if (resolved_idx == -1) {
             PRINTF("ERROR: Could not find asset info for verifyingContract address!\n");

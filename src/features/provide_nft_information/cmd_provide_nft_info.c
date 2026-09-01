@@ -219,7 +219,7 @@ uint16_t handle_provide_nft_information(const uint8_t *workBuffer,
     // Write the asset index into the response buffer, mark the asset info as
     // validated, and advance the response length by one byte.
     G_io_tx_buffer[0] = tmpCtx.transactionContext.currentAssetIndex;
-    validate_current_asset_info(ASSET_TYPE_NFT);
+    validate_current_asset_info(ASSET_TYPE_NFT, chain_id);
     *tx += 1;
     return SWO_SUCCESS;
 }

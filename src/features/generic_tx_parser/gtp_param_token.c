@@ -78,7 +78,7 @@ bool format_param_token(const s_param_token *param, const char *name) {
             if (match_native(addr, param)) {
                 ticker = get_displayable_ticker(&chain_id, chainConfig, true);
             } else if ((token_def = (const tokenDefinition_t *)
-                            get_asset_info_by_type_and_addr(ASSET_TYPE_ERC20, addr))) {
+                            get_asset_info_by_type_and_addr(ASSET_TYPE_ERC20, addr, chain_id))) {
                 ticker = token_def->ticker;
             }
             if (ticker == NULL) {

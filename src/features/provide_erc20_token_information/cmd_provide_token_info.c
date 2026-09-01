@@ -63,7 +63,7 @@ uint16_t handle_provide_erc20_token_information(const uint8_t *workBuffer,
     }
 
     G_io_tx_buffer[0] = tmpCtx.transactionContext.currentAssetIndex;
-    validate_current_asset_info(ASSET_TYPE_ERC20);
+    validate_current_asset_info(ASSET_TYPE_ERC20, chain_id);
     *tx += 1;
     return SWO_SUCCESS;
 }

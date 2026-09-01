@@ -25,8 +25,10 @@ void handle_init_contract_721(ethPluginInitContract_t *msg) {
     erc721_context_t *context = (erc721_context_t *) msg->pluginContext;
     explicit_bzero(context, sizeof(*context));
 
-    // Require metadata for the contract actually being called
-    if (get_asset_info_by_type_and_addr(ASSET_TYPE_NFT, msg->txContent->destination) == NULL) {
+    // Require metadata for the contract actually being called, bound to the
+    // transaction's chain as soon as that is resolvable (see
+    // has_asset_info_for_current_tx).
+    if (!has_asset_info_for_current_tx(ASSET_TYPE_NFT, msg->txContent->destination)) {
         PRINTF("No NFT metadata for the called contract when trying to sign!\n");
         msg->result = ETH_PLUGIN_RESULT_ERROR;
         return;

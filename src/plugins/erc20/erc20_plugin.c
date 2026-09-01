@@ -8,6 +8,7 @@
 #include "utils.h"
 #include "calldata.h"
 #include "manage_asset_info.h"
+#include "network.h"
 #include "eth_swap_utils.h"
 #include "erc20_plugin.h"
 
@@ -187,7 +188,8 @@ void erc20_plugin_call(eth_plugin_msg_t message, void *parameters) {
 
                 if ((token_def = (const tokenDefinition_t *) get_asset_info_by_type_and_addr(
                          ASSET_TYPE_ERC20,
-                         msg->tokenLookup1)) == NULL) {
+                         msg->tokenLookup1,
+                         get_tx_chain_id())) == NULL) {
                     msg->result = ETH_PLUGIN_RESULT_ERROR;
                     break;
                 }
