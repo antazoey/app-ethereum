@@ -45,7 +45,7 @@ uint16_t handle_provide_erc20_token_information(const uint8_t *workBuffer,
     dataLength -= 4;
     // TODO: Handle 64-bit long chain IDs
     chain_id = U4BE(workBuffer, offset);
-    if (!app_compatible_with_chain_id(&chain_id)) {
+    if (!chain_id_is_signable(chain_id)) {
         UNSUPPORTED_CHAIN_ID_MSG(chain_id);
         return SWO_INCORRECT_DATA;
     }

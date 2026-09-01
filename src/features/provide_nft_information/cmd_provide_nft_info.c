@@ -146,10 +146,10 @@ uint16_t handle_provide_nft_information(const uint8_t *workBuffer,
 
     // --- Chain ID parsing and compatibility check ---
     // The chain ID is encoded as a big-endian 64-bit integer.
-    // Reject it if the running app was built for a different chain.
+    // Reject it if this app could never sign a transaction on that chain.
     chain_id = u64_from_BE(workBuffer + offset, CHAIN_ID_SIZE);
     PRINTF("ChainID: %llu\n", chain_id);
-    if (!app_compatible_with_chain_id(&chain_id)) {
+    if (!chain_id_is_signable(chain_id)) {
         UNSUPPORTED_CHAIN_ID_MSG(chain_id);
         return SWO_INCORRECT_DATA;
     }
