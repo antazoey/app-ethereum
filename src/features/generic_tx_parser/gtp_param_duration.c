@@ -41,7 +41,7 @@ bool format_param_duration(const s_param_duration *param, const char *name) {
     s_parsed_value_collection collec = {0};
     char *buf = strings.tmp.tmp;
     size_t buf_size = sizeof(strings.tmp.tmp);
-    uint16_t days;
+    uint64_t days;
     uint8_t hours;
     uint8_t minutes;
     uint8_t seconds;
@@ -52,6 +52,13 @@ bool format_param_duration(const s_param_duration *param, const char *name) {
     if ((ret = value_get(&param->value, &collec))) {
         for (int i = 0; i < collec.size; ++i) {
             off = 0;
+            // A duration is a uint64: reject values with non-zero high bytes instead
+            // of silently truncating them to a shorter displayed duration.
+            if ((collec.value[i].length > sizeof(raw_buf)) &&
+                !allzeroes(collec.value[i].ptr, collec.value[i].length - sizeof(raw_buf))) {
+                ret = false;
+                break;
+            }
             buf_shrink_expand(collec.value[i].ptr,
                               collec.value[i].length,
                               raw_buf,
@@ -60,7 +67,7 @@ bool format_param_duration(const s_param_duration *param, const char *name) {
 
             days = remaining / SECONDS_IN_DAY;
             if (days > 0) {
-                snprintf(&buf[off], buf_size - off, "%dd", days);
+                snprintf(&buf[off], buf_size - off, "%llud", (unsigned long long) days);
                 off = strlen(buf);
             }
             remaining %= SECONDS_IN_DAY;
