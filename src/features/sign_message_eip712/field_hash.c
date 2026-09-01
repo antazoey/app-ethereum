@@ -42,6 +42,15 @@ void field_hash_deinit(void) {
 }
 
 /**
+ * Whether no field value is currently being streamed across APDU chunks
+ *
+ * @return whether the field hash context is idle
+ */
+bool field_hash_is_idle(void) {
+    return (fh != NULL) && (fh->state == FHS_IDLE);
+}
+
+/**
  * Special handling of the first chunk received from a field value
  *
  * @param[in] field_ptr pointer to the struct field definition
