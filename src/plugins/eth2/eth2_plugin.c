@@ -140,10 +140,17 @@ void eth2_plugin_call(eth_plugin_msg_t message, void *parameters) {
                                INDEX_MAX);
                         msg->result = ETH_PLUGIN_RESULT_ERROR;
                         context->valid = 0;
+                        break;
                     }
                     withdrawalKeyPath[2] = eth2WithdrawalIndex;
                     withdrawalKeyPath[3] = WITHDRAWAL_KEY_PATH_4;
-                    get_eth2_public_key(withdrawalKeyPath, 4, tmp);
+                    if (get_eth2_public_key(withdrawalKeyPath, 4, tmp) != CX_OK) {
+                        PRINTF("eth2 plugin: failed to derive withdrawal public key\n");
+                        explicit_bzero(tmp, sizeof(tmp));
+                        msg->result = ETH_PLUGIN_RESULT_ERROR;
+                        context->valid = 0;
+                        break;
+                    }
                     PRINTF("eth2 plugin computed withdrawal public key %.*H\n",
                            BLS12381_G1_COMPRESSED_PUBKEY_LENGTH,
                            tmp);
