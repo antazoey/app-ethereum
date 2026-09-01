@@ -29,6 +29,7 @@ typedef struct {
 typedef struct {
     list_node_t _list;
     cx_sha3_t hash;
+    bool has_data;  // whether anything was ever fed to this context
 } s_hash_ctx;
 
 bool path_set_root(const char *struct_name, uint8_t length);

@@ -180,18 +180,20 @@ static void remove_last_hash_ctx(void) {
  */
 static bool finalize_hash_depth(uint8_t *hash) {
     const s_hash_ctx *hash_ctx;
-    size_t hashed_bytes;
+    bool has_data;
 
     if ((hash_ctx = get_last_hash_ctx()) == NULL) {
         return false;
     }
-    hashed_bytes = hash_ctx->hash.blen;
+    // Whether anything was absorbed at this depth (cx_sha3_t.blen cannot tell
+    // full blocks apart from an empty context)
+    has_data = hash_ctx->has_data;
     // finalize hash
     if (finalize_hash((cx_hash_t *) &hash_ctx->hash, hash, KECCAK256_HASH_BYTESIZE) != true) {
         return false;
     }
     remove_last_hash_ctx();
-    return hashed_bytes > 0;
+    return has_data;
 }
 
 /**
@@ -200,7 +202,7 @@ static bool finalize_hash_depth(uint8_t *hash) {
  * @param[in] hash pointer to given hash
  */
 static bool feed_last_hash_depth(const uint8_t *hash) {
-    const s_hash_ctx *hash_ctx;
+    s_hash_ctx *hash_ctx;
 
     if ((hash_ctx = get_last_hash_ctx()) == NULL) {
         return false;
@@ -214,6 +216,7 @@ static bool feed_last_hash_depth(const uint8_t *hash) {
                          0) != CX_OK) {
         return false;
     }
+    hash_ctx->has_data = true;
     return true;
 }
 

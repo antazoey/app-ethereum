@@ -155,6 +155,7 @@ static void field_hash_feed_parent(e_type field_type, const uint8_t *hash) {
     if (hash_ctx != NULL) {
         // continue the progressive hash on it
         hash_nbytes(hash, len, (cx_hash_t *) &hash_ctx->hash);
+        hash_ctx->has_data = true;
     }
     // deallocate it
     APP_MEM_FREE((void *) hash);
