@@ -1,4 +1,6 @@
 #include "fuzz_utils.h"
+#include "context_712.h"
+#include "commands_712.h"
 
 int fuzzEIP712(const uint8_t *data, size_t size) {
     if (eip712_context_init() == false) return 0;

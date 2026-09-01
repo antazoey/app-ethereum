@@ -1,6 +1,7 @@
 #include <setjmp.h>
 #include "fuzz_utils.h"
 #include "mocks.h"
+#include "cmd_proxy_info.h"
 
 int fuzzProxyInfo(const uint8_t *data, size_t size) {
     if (size < 1) return 0;

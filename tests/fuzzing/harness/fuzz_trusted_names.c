@@ -1,4 +1,5 @@
 #include "fuzz_utils.h"
+#include "cmd_trusted_name.h"
 
 int fuzzTrustedNames(const uint8_t *data, size_t size) {
     size_t offset = 0;

@@ -1,4 +1,5 @@
 #include "fuzz_utils.h"
+#include "cmd_get_tx_simulation.h"
 
 int fuzzTxCheck(const uint8_t *data, size_t size) {
     unsigned int flags;
