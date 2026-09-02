@@ -398,9 +398,8 @@ bool ui_712_message_hash(void) {
  *
  * @param[in] data the data that needs formatting
  * @param[in] length its length
- * @param[in] last if this is the last chunk
  */
-static bool ui_712_format_str(const uint8_t *data, uint8_t length, bool last) {
+static bool ui_712_format_str(const uint8_t *data, uint8_t length) {
     size_t max_len = sizeof(strings.tmp.tmp) - 1;
     size_t cur_len = strlen(strings.tmp.tmp);
     size_t available;
@@ -416,8 +415,13 @@ static bool ui_712_format_str(const uint8_t *data, uint8_t length, bool last) {
     }
 
     if (cur_len >= max_len) {
-        // Ensure null-termination even if we're at capacity
+        // Buffer is full; any further byte is dropped and the display must say so.
+        // Overwrite the last 3 bytes of content so the string length stays max_len
+        // and later chunks keep hitting this path instead of erasing the marker.
         strings.tmp.tmp[max_len] = '\0';
+        if (length > 0) {
+            memcpy(strings.tmp.tmp + max_len - 3, "...", 3);
+        }
         return true;
     }
 
@@ -427,10 +431,11 @@ static bool ui_712_format_str(const uint8_t *data, uint8_t length, bool last) {
     memcpy(strings.tmp.tmp + cur_len, data, to_copy);
     strings.tmp.tmp[cur_len + to_copy] = '\0';
 
-    // truncated - add ellipsis if this is the last chunk and we couldn't fit everything
-    if (last && (to_copy < length)) {
+    // some bytes of this chunk were dropped: mark truncation immediately and keep
+    // the buffer full, on any chunk — doing it only for the final chunk lets a host
+    // hide a suffix behind chunk boundaries
+    if (to_copy < length) {
         memcpy(strings.tmp.tmp + max_len - 3, "...", 3);
-        strings.tmp.tmp[max_len] = '\0';
     }
     return true;
 }
@@ -1059,7 +1064,7 @@ bool ui_712_feed_to_display(const s_struct_712_field *field_ptr,
     if (ui_712_field_shown()) {
         switch (field_ptr->type) {
             case TYPE_SOL_STRING:
-                if (!ui_712_format_str(data, length, last)) {
+                if (!ui_712_format_str(data, length)) {
                     return false;
                 }
                 break;
