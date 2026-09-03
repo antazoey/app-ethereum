@@ -475,8 +475,9 @@ bool ui_gcs(void) {
     }
 
     // First pair: contract info
-    index_allocated[pair] = true;
-    g_pairs[pair].item = APP_MEM_STRDUP("Interaction with");
+    if ((g_pairs[pair].item = APP_MEM_STRDUP("Interaction with")) == NULL) {
+        return false;
+    }
     g_pairs[pair].value = get_creator_name(info_tx);
     if (g_pairs[pair].value == NULL) {
         // not great, but this cannot be NULL
@@ -484,6 +485,10 @@ bool ui_gcs(void) {
     } else {
         g_pairs[pair].value = APP_MEM_STRDUP(g_pairs[pair].value);
     }
+    if (g_pairs[pair].value == NULL) {
+        return false;
+    }
+    index_allocated[pair] = true;
     if (APP_MEM_CALLOC((void **) &ext, sizeof(*ext)) == false) {
         return false;
     }
@@ -503,6 +508,9 @@ bool ui_gcs(void) {
     } else {
         ext->backText = APP_MEM_STRDUP(ext->backText);
     }
+    if (ext->backText == NULL) {
+        return false;
+    }
     g_pairs[pair].aliasValue = true;
     pair++;
 
@@ -518,12 +526,11 @@ bool ui_gcs(void) {
             PRINTF("Error: no sender address!\n");
             return false;
         }
-        index_allocated[pair] = true;
-        g_pairs[pair].item = APP_MEM_STRDUP("From");
-        g_pairs[pair].value = APP_MEM_STRDUP(tmp_buf);
-        if ((g_pairs[pair].item == NULL) || (g_pairs[pair].value == NULL)) {
+        if (((g_pairs[pair].item = APP_MEM_STRDUP("From")) == NULL) ||
+            ((g_pairs[pair].value = APP_MEM_STRDUP(tmp_buf)) == NULL)) {
             return false;
         }
+        index_allocated[pair] = true;
         pair++;
     }
 
@@ -541,8 +548,10 @@ bool ui_gcs(void) {
             // Batch intermediate page
             tx_idx++;
             snprintf(tmp_buf, tmp_buf_size, "%d of %d", tx_idx, txContext.batch_nb_tx);
-            g_pairs[pair].item = APP_MEM_STRDUP("Review transaction");
-            g_pairs[pair].value = APP_MEM_STRDUP(tmp_buf);
+            if (((g_pairs[pair].item = APP_MEM_STRDUP("Review transaction")) == NULL) ||
+                ((g_pairs[pair].value = APP_MEM_STRDUP(tmp_buf)) == NULL)) {
+                return false;
+            }
             index_allocated[pair] = true;
             g_pairs[pair].centeredInfo = true;
             pair++;
@@ -569,7 +578,6 @@ bool ui_gcs(void) {
         uint64_t chain_id = get_tx_chain_id();
         const char *ticker = get_displayable_ticker(&chain_id, chainConfig, true);
 
-        g_pairs[pair].item = APP_MEM_STRDUP("Amount");
         if (!amountToString(tmpContent.txContent.value.value,
                             tmpContent.txContent.value.length,
                             WEI_TO_ETHER,
@@ -578,7 +586,10 @@ bool ui_gcs(void) {
                             tmp_buf_size)) {
             return false;
         }
-        g_pairs[pair].value = APP_MEM_STRDUP(tmp_buf);
+        if (((g_pairs[pair].item = APP_MEM_STRDUP("Amount")) == NULL) ||
+            ((g_pairs[pair].value = APP_MEM_STRDUP(tmp_buf)) == NULL)) {
+            return false;
+        }
         index_allocated[pair] = true;
         pair++;
     }
@@ -588,11 +599,13 @@ bool ui_gcs(void) {
             PRINTF("Error: No more pairs available for network!\n");
             return false;
         }
-        g_pairs[pair].item = APP_MEM_STRDUP("Network");
         if (get_network_as_string(tmp_buf, tmp_buf_size) != true) {
             return false;
         }
-        g_pairs[pair].value = APP_MEM_STRDUP(tmp_buf);
+        if (((g_pairs[pair].item = APP_MEM_STRDUP("Network")) == NULL) ||
+            ((g_pairs[pair].value = APP_MEM_STRDUP(tmp_buf)) == NULL)) {
+            return false;
+        }
         index_allocated[pair] = true;
         pair++;
     }
@@ -602,14 +615,17 @@ bool ui_gcs(void) {
         PRINTF("Error: No more pairs available for fees!\n");
         return false;
     }
-    g_pairs[pair].item = APP_MEM_STRDUP("Max fees");
     if (max_transaction_fee_to_string(&tmpContent.txContent.gasprice,
                                       &tmpContent.txContent.startgas,
                                       tmp_buf,
                                       tmp_buf_size) == false) {
         PRINTF("Error: Could not format the max fees!\n");
+        return false;
     }
-    g_pairs[pair].value = APP_MEM_STRDUP(tmp_buf);
+    if (((g_pairs[pair].item = APP_MEM_STRDUP("Max fees")) == NULL) ||
+        ((g_pairs[pair].value = APP_MEM_STRDUP(tmp_buf)) == NULL)) {
+        return false;
+    }
     index_allocated[pair] = true;
 
 #ifndef FUZZ
