@@ -181,6 +181,8 @@ def test_sign_simple(scenario_navigator: NavigateWithScenario, test_name: str, d
 
 
 def test_sign_limit_nonce(scenario_navigator: NavigateWithScenario, test_name: str):
+    """A nonce that does not fit the display buffer aborts signing
+    (strings.common.nonce is 8 bytes)."""
     tx_params: dict = {
         "nonce": 2**64-1,
         "gasPrice": 10,
@@ -189,7 +191,17 @@ def test_sign_limit_nonce(scenario_navigator: NavigateWithScenario, test_name: s
         "value": 0x08762,
         "chainId": CHAIN_ID
     }
-    common(scenario_navigator, tx_params, test_name, BIP32_PATH2)
+    backend = scenario_navigator.backend
+    app_client = EthAppClient(backend)
+
+    name, ticker, icon = get_network_config(backend.device.type, tx_params["chainId"])
+    if name and ticker:
+        app_client.provide_network_information(DynamicNetwork(name, ticker, tx_params["chainId"], icon))
+
+    with pytest.raises(ExceptionRAPDU) as err:
+        with app_client.sign(BIP32_PATH2, tx_params):
+            pass
+    assert err.value.status == StatusWord.INVALID_DATA
 
 
 def test_sign_nonce_display(navigator: Navigator,

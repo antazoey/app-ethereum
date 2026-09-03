@@ -281,10 +281,13 @@ bool max_transaction_fee_to_string(const txInt256_t *BEGasPrice,
     return raw_fee_to_string(&rawFee, displayBuffer, displayBufferSize);
 }
 
-static void nonce_to_string(const txInt256_t *nonce, char *out, size_t out_size) {
-    uint256_t nonce_uint256;
-    convertUint256BE(nonce->value, nonce->length, &nonce_uint256);
-    tostring256(&nonce_uint256, 10, out, out_size);
+static bool nonce_to_string(const txInt256_t *nonce, char *out, size_t out_size) {
+    uint256_t nonce_uint256 = {0};
+    // RLP encodes a zero value as an empty field; treat it as 0
+    if ((nonce->length > 0) && !convertUint256BE(nonce->value, nonce->length, &nonce_uint256)) {
+        return false;
+    }
+    return tostring256(&nonce_uint256, 10, out, out_size);
 }
 
 __attribute__((noinline)) static uint16_t finalize_parsing_helper(const txContext_t *context) {
@@ -564,9 +567,13 @@ __attribute__((noinline)) static uint16_t finalize_parsing_helper(const txContex
     PRINTF("Fees displayed: %s\n", strings.common.maxFee);
 
     // Prepare nonce to display
-    nonce_to_string(&tmpContent.txContent.nonce,
-                    strings.common.nonce,
-                    sizeof(strings.common.nonce));
+    if (!nonce_to_string(&tmpContent.txContent.nonce,
+                         strings.common.nonce,
+                         sizeof(strings.common.nonce))) {
+        PRINTF("Error: could not format the nonce!\n");
+        error = SWO_INCORRECT_DATA;
+        goto end;
+    }
     PRINTF("Nonce: %s\n", strings.common.nonce);
 
     // Prepare network field
