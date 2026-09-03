@@ -218,7 +218,7 @@ static uint16_t address_to_string(uint8_t *in,
     return SWO_SUCCESS;
 }
 
-static void raw_fee_to_string(uint256_t *rawFee, char *out_buffer, uint32_t out_buffer_size) {
+static bool raw_fee_to_string(uint256_t *rawFee, char *out_buffer, uint32_t out_buffer_size) {
     // Fees are always in the base currency, this is why we need to use the chain_id
     uint64_t chain_id = get_tx_chain_id();
     const char *ticker = get_displayable_ticker(&chain_id, chainConfig, true);
@@ -231,7 +231,7 @@ static void raw_fee_to_string(uint256_t *rawFee, char *out_buffer, uint32_t out_
     // Convert the fee to decimal string first
     if (tostring256(rawFee, 10, (char *) raw_fee_buffer, sizeof(raw_fee_buffer)) == false) {
         PRINTF("tostring256 failed\n");
-        return;
+        return false;
     }
     // Adjust the decimal position, store the result in out_buffer
     fee_len = strnlen(raw_fee_buffer, sizeof(raw_fee_buffer));
@@ -239,18 +239,19 @@ static void raw_fee_to_string(uint256_t *rawFee, char *out_buffer, uint32_t out_
     if (adjustDecimals(raw_fee_buffer, fee_len, out_buffer, out_buffer_size, WEI_TO_ETHER) ==
         false) {
         PRINTF("adjustDecimals failed\n");
-        return;
+        return false;
     }
 
     // out_buffer will contain the fee, a space and the ticker, ended with \0
     if ((strlen(out_buffer) + 1 + ticker_len + 1) > out_buffer_size) {
         PRINTF("Not enough space for ticker\n");
-        return;
+        return false;
     }
     // Append a space and the ticker to the out_buffer
     // strlcat cannot fail here as we checked boundaries above
     strlcat(out_buffer, " ", out_buffer_size);
     strlcat(out_buffer, ticker, out_buffer_size);
+    return true;
 }
 
 // Compute the fees, transform it to a string, prepend a ticker to it and copy everything to
@@ -277,8 +278,7 @@ bool max_transaction_fee_to_string(const txInt256_t *BEGasPrice,
     if (mul256(&gasPrice, &gasLimit, &rawFee) == false) {
         return false;
     }
-    raw_fee_to_string(&rawFee, displayBuffer, displayBufferSize);
-    return true;
+    return raw_fee_to_string(&rawFee, displayBuffer, displayBufferSize);
 }
 
 static void nonce_to_string(const txInt256_t *nonce, char *out, size_t out_size) {
