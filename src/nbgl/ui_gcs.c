@@ -176,6 +176,9 @@ static bool prepare_infos(nbgl_contentInfoList_t *infos) {
         if (APP_MEM_CALLOC((void **) &extensions, sizeof(*extensions) * count) == false) {
             return false;
         }
+        // The extension array is only `count` long: nbInfos must match before any
+        // fallible operation, otherwise an error-path cleanup would index past it
+        infos->nbInfos = count;
         infos->infoExtensions = extensions;
         infos->withExtensions = true;
 
