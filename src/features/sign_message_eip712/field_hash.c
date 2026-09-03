@@ -209,6 +209,19 @@ static bool field_hash_domain_special_fields(const s_struct_712_field *field_ptr
         explicit_bzero(&eip712_context->contract_addr[data_length],
                        sizeof(eip712_context->contract_addr) - data_length);
     } else if (strcmp(key, "chainId") == 0) {
+        // The domain hash commits to the full field bytes; the auxiliary chain ID
+        // must match the same numeric value or filtering/network display would
+        // diverge from what is signed
+        if (data_length > sizeof(uint64_t)) {
+            uint8_t leading = data_length - sizeof(uint64_t);
+            if (!is_zeroes_buffer(data, leading)) {
+                PRINTF("Error: chainId too large\n");
+                apdu_response_code = SWO_INCORRECT_DATA;
+                return false;
+            }
+            data += leading;
+            data_length = sizeof(uint64_t);
+        }
         eip712_context->chain_id = u64_from_BE(data, data_length);
     }
     return true;
