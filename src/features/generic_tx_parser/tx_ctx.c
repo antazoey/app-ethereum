@@ -112,7 +112,6 @@ static bool process_empty_tx(const s_tx_ctx *tx_ctx) {
     uint8_t decimals;
     char *buf = strings.tmp.tmp;
     size_t buf_size = sizeof(strings.tmp.tmp);
-    const s_tx_info *tx_info = tx_ctx->tx_info;
     e_param_type param_type;
     const s_trusted_name *trusted_name = NULL;
 
@@ -120,12 +119,8 @@ static bool process_empty_tx(const s_tx_ctx *tx_ctx) {
         if (!set_intent_field("Send")) {
             return false;
         }
-        if (tx_info == NULL) {
-            if ((tx_info = get_root_tx_info()) == NULL) {
-                return false;
-            }
-        }
-        ticker = get_displayable_ticker(&tx_info->chain_id, chainConfig, true);
+        // The nested context carries its own (possibly cross-chain) chain ID
+        ticker = get_displayable_ticker(&tx_ctx->chain_id, chainConfig, true);
         decimals = WEI_TO_ETHER;
         if (!amountToString(tx_ctx->amount,
                             sizeof(tx_ctx->amount),
@@ -144,7 +139,6 @@ static bool process_empty_tx(const s_tx_ctx *tx_ctx) {
         }
     }
 
-    uint64_t chain_id = get_tx_chain_id();
     e_name_type types[] = {TN_TYPE_ACCOUNT};
     e_name_source sources[] = {TN_SOURCE_ENS, TN_SOURCE_LAB, TN_SOURCE_MAB};
 
@@ -152,13 +146,13 @@ static bool process_empty_tx(const s_tx_ctx *tx_ctx) {
                                          types,
                                          ARRAYLEN(sources),
                                          sources,
-                                         &chain_id,
+                                         &tx_ctx->chain_id,
                                          tx_ctx->to)) != NULL) {
         param_type = PARAM_TYPE_TRUSTED_NAME;
         strlcpy(buf, trusted_name->name, buf_size);
     } else {
         param_type = PARAM_TYPE_RAW;
-        if (!getEthDisplayableAddress(tx_ctx->to, buf, buf_size, chainConfig->chainId)) {
+        if (!getEthDisplayableAddress(tx_ctx->to, buf, buf_size, tx_ctx->chain_id)) {
             return false;
         }
     }
