@@ -73,7 +73,16 @@ DEFINE_TLV_PARSER(PARAM_TOKEN_AMOUNT_TAGS, NULL, param_token_amount_tlv_parser)
 
 bool handle_param_token_amount_struct(const buffer_t *buf, s_param_token_amount_context *context) {
     TLV_reception_t received_tags;
-    return param_token_amount_tlv_parser(buf, context, &received_tags);
+    if (!param_token_amount_tlv_parser(buf, context, &received_tags)) {
+        return false;
+    }
+    // Enforce the sub-structure's mandatory tags: an empty or partial PARAM
+    // payload would otherwise parse fine and never appear in the review
+    if (!TLV_CHECK_RECEIVED_TAGS(received_tags, TAG_VERSION, TAG_VALUE)) {
+        PRINTF("Error: missing mandatory tag(s) in gtp_param_token_amount\n");
+        return false;
+    }
+    return true;
 }
 
 static bool match_native(const uint8_t *addr, const s_param_token_amount *param) {

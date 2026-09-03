@@ -33,7 +33,16 @@ DEFINE_TLV_PARSER(PARAM_DURATION_TAGS, NULL, param_duration_tlv_parser)
 
 bool handle_param_duration_struct(const buffer_t *buf, s_param_duration_context *context) {
     TLV_reception_t received_tags;
-    return param_duration_tlv_parser(buf, context, &received_tags);
+    if (!param_duration_tlv_parser(buf, context, &received_tags)) {
+        return false;
+    }
+    // Enforce the sub-structure's mandatory tags: an empty or partial PARAM
+    // payload would otherwise parse fine and never appear in the review
+    if (!TLV_CHECK_RECEIVED_TAGS(received_tags, TAG_VERSION, TAG_VALUE)) {
+        PRINTF("Error: missing mandatory tag(s) in gtp_param_duration\n");
+        return false;
+    }
+    return true;
 }
 
 bool format_param_duration(const s_param_duration *param, const char *name) {

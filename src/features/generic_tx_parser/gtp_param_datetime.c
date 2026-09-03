@@ -42,7 +42,16 @@ DEFINE_TLV_PARSER(PARAM_DATETIME_TAGS, NULL, param_datetime_tlv_parser)
 
 bool handle_param_datetime_struct(const buffer_t *buf, s_param_datetime_context *context) {
     TLV_reception_t received_tags;
-    return param_datetime_tlv_parser(buf, context, &received_tags);
+    if (!param_datetime_tlv_parser(buf, context, &received_tags)) {
+        return false;
+    }
+    // Enforce the sub-structure's mandatory tags: an empty or partial PARAM
+    // payload would otherwise parse fine and never appear in the review
+    if (!TLV_CHECK_RECEIVED_TAGS(received_tags, TAG_VERSION, TAG_VALUE, TAG_TYPE)) {
+        PRINTF("Error: missing mandatory tag(s) in gtp_param_datetime\n");
+        return false;
+    }
+    return true;
 }
 
 bool format_param_datetime(const s_param_datetime *param, const char *name) {

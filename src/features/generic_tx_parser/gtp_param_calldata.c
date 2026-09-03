@@ -80,7 +80,16 @@ DEFINE_TLV_PARSER(PARAM_CALLDATA_TAGS, NULL, param_calldata_tlv_parser)
 
 bool handle_param_calldata_struct(const buffer_t *buf, s_param_calldata_context *context) {
     TLV_reception_t received_tags;
-    return param_calldata_tlv_parser(buf, context, &received_tags);
+    if (!param_calldata_tlv_parser(buf, context, &received_tags)) {
+        return false;
+    }
+    // Enforce the sub-structure's mandatory tags: an empty or partial PARAM
+    // payload would otherwise parse fine and never appear in the review
+    if (!TLV_CHECK_RECEIVED_TAGS(received_tags, TAG_VERSION, TAG_VALUE, TAG_CALLEE)) {
+        PRINTF("Error: missing mandatory tag(s) in gtp_param_calldata\n");
+        return false;
+    }
+    return true;
 }
 
 static bool process_nested_calldata(const s_param_calldata *param,

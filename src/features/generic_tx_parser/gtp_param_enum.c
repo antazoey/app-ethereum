@@ -33,7 +33,16 @@ DEFINE_TLV_PARSER(PARAM_ENUM_TAGS, NULL, param_enum_tlv_parser)
 
 bool handle_param_enum_struct(const buffer_t *buf, s_param_enum_context *context) {
     TLV_reception_t received_tags;
-    return param_enum_tlv_parser(buf, context, &received_tags);
+    if (!param_enum_tlv_parser(buf, context, &received_tags)) {
+        return false;
+    }
+    // Enforce the sub-structure's mandatory tags: an empty or partial PARAM
+    // payload would otherwise parse fine and never appear in the review
+    if (!TLV_CHECK_RECEIVED_TAGS(received_tags, TAG_VERSION, TAG_ID, TAG_VALUE)) {
+        PRINTF("Error: missing mandatory tag(s) in gtp_param_enum\n");
+        return false;
+    }
+    return true;
 }
 
 bool format_param_enum(const s_param_enum *param, const char *name) {
