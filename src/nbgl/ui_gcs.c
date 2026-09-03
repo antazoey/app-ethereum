@@ -463,12 +463,7 @@ bool ui_gcs(void) {
     // Fees
     nbPairs += 1;
 
-    if (nbPairs > UINT8_MAX) {
-        PRINTF("Error: Too many review fields: %u\n", (unsigned) nbPairs);
-        return false;
-    }
-
-    if (!ui_pairs_init((uint8_t) nbPairs)) {
+    if (!ui_pairs_init(nbPairs)) {
         return false;
     }
 

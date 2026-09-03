@@ -1447,7 +1447,7 @@ void ui_712_set_trusted_name_requirements(uint8_t type_count,
  *
  */
 bool ui_712_push_pairs(void) {
-    uint8_t nbPairs = 0;
+    size_t nbPairs = 0;
     uint8_t pair = 0;
     s_ui_712_pair *tmp = NULL;
     uint8_t tx_idx = 0;
