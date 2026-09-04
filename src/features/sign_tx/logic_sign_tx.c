@@ -465,6 +465,14 @@ __attribute__((noinline)) static uint16_t finalize_parsing_helper(const txContex
             PRINTF("Plugin fell back, reverting to the generic transaction review\n");
             pluginType = PLUGIN_TYPE_NONE;
         }
+    } else if (!G_called_from_swap && (pluginType != PLUGIN_TYPE_NONE) &&
+               (pluginType != PLUGIN_TYPE_SWAP_WITH_CALLDATA)) {
+        // A registered plugin that did not run (e.g. chain mismatch at init) must
+        // not select the plugin UI: it would show no decoded items and suppress
+        // the standard To/Amount/hash rows
+        PRINTF("Plugin unavailable, using standard blind signing\n");
+        pluginType = PLUGIN_TYPE_NONE;
+        dataContext.tokenContext.pluginUiMaxItems = 0;
     }
 
     if (G_called_from_swap) {
