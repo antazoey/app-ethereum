@@ -23,6 +23,8 @@ typedef struct swap_with_calldata_context_s {
     // Computed on (Selector + N * 32bytes parameters)
     // We don't care at all about the content, we'll just compare the hash with the promised hash.
     cx_sha256_t update_hash;
+    uint32_t expected_size;
+    uint32_t received_size;
 } swap_with_calldata_context_t;
 
 void handle_init_contract_swap_with_calldata(ethPluginInitContract_t *msg) {
@@ -33,8 +35,16 @@ void handle_init_contract_swap_with_calldata(ethPluginInitContract_t *msg) {
         msg->result = ETH_PLUGIN_RESULT_ERROR;
         return;
     }
+    if (msg->dataSize < SELECTOR_SIZE) {
+        PRINTF("swap_with_calldata plugin can't be used with dataSize < %d", SELECTOR_SIZE);
+        msg->result = ETH_PLUGIN_RESULT_ERROR;
+        return;
+    }
 
     swap_with_calldata_context_t *context = (swap_with_calldata_context_t *) msg->pluginContext;
+    explicit_bzero(context, sizeof(*context));
+    context->expected_size = msg->dataSize;
+    context->received_size = SELECTOR_SIZE;
 
     PRINTF("swap_with_calldata plugin init contract %.*H\n", SELECTOR_SIZE, msg->selector);
 
@@ -50,6 +60,9 @@ void handle_init_contract_swap_with_calldata(ethPluginInitContract_t *msg) {
 }
 
 void handle_provide_parameter_swap_with_calldata(ethPluginProvideParameter_t *msg) {
+    uint32_t remaining;
+    uint32_t chunk_size;
+
     PRINTF("handle_provide_parameter_swap_with_calldata\n");
     if (!G_called_from_swap) {
         // Can't happen in theory, but let's double check.
@@ -60,15 +73,33 @@ void handle_provide_parameter_swap_with_calldata(ethPluginProvideParameter_t *ms
 
     swap_with_calldata_context_t *context = (swap_with_calldata_context_t *) msg->pluginContext;
 
+    // Parameters must arrive in order, contiguously, without overrunning the calldata.
+    if ((msg->parameterOffset != context->received_size) ||
+        (context->received_size >= context->expected_size)) {
+        PRINTF("swap_with_calldata plugin received invalid parameter\n");
+        msg->result = ETH_PLUGIN_RESULT_ERROR;
+        return;
+    }
+
+    // Do not use msg->parameter_size: it carries the size of the APDU chunk that completed
+    // this parameter, not the parameter length. A word split across two APDUs is announced
+    // with a short parameter_size even though msg->parameter already holds the whole
+    // reassembled word. Derive the number of calldata bytes this parameter contributes from
+    // the offsets instead, so that a trailing `bytes` remainder shorter than a full word is
+    // not padded into the digest.
+    remaining = context->expected_size - context->received_size;
+    chunk_size = (remaining < PARAMETER_LENGTH) ? remaining : PARAMETER_LENGTH;
+
     PRINTF("swap_with_calldata plugin provide parameter %d %.*H\n",
            msg->parameterOffset,
-           PARAMETER_LENGTH,
+           (int) chunk_size,
            msg->parameter);
 
-    if (cx_sha256_update(&context->update_hash, msg->parameter, PARAMETER_LENGTH) != CX_OK) {
+    if (cx_sha256_update(&context->update_hash, msg->parameter, chunk_size) != CX_OK) {
         PRINTF("ERROR: cx_sha256_update on parameter %d\n", msg->parameterOffset);
         msg->result = ETH_PLUGIN_RESULT_ERROR;
     } else {
+        context->received_size += chunk_size;
         msg->result = ETH_PLUGIN_RESULT_OK;
     }
 }

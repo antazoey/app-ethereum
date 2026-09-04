@@ -78,7 +78,21 @@ const internalStorage_t N_storage_real;
 caller_app_t *caller_app = NULL;
 const chain_config_t *chainConfig;
 
-void reset_app_context(void) {
+// Tear down every per-flow global.
+//
+// `scrub_strings` wipes the `strings` union, which holds the addresses and amounts of the
+// transaction under review. Only a caller that is ending a user-facing flow should ask for
+// it: on an initialization path there is nothing to protect yet, and in library (swap) mode
+// copy_transaction_parameters() has already staged the values promised by the Exchange app
+// in there before app_init() runs.
+static void reset_app_context_ex(bool scrub_strings) {
+    // Same reasoning for a reset happening once the swap flow is under way:
+    // finalize_parsing_helper() still has to compare those staged values against the
+    // parsed transaction. Read the flag before it is cleared further down.
+    if (G_called_from_swap) {
+        scrub_strings = false;
+    }
+
     if (appState == APP_STATE_SIGNING_MESSAGE) {
         message_cleanup();
     }
@@ -113,7 +127,14 @@ void reset_app_context(void) {
 #ifdef HAVE_GATING_SUPPORT
     clear_gating();
 #endif
+    if (scrub_strings) {
+        explicit_bzero((uint8_t *) &strings, sizeof(strings));
+    }
     appState = APP_STATE_IDLE;
+}
+
+void reset_app_context(void) {
+    reset_app_context_ex(true);
 }
 
 void app_quit(void) {
@@ -422,7 +443,10 @@ static void app_init(bool library_mode) {
         // If we are not in library mode, 1st init is the dynamic memory
         app_mem_init();
     }
-    reset_app_context();
+    // Initialization path: do not scrub `strings`. In library (swap) mode
+    // copy_transaction_parameters() has already staged the values promised by Exchange
+    // there, and they must survive until finalize_parsing_helper() checks them.
+    reset_app_context_ex(false);
     common_app_init();
     storage_init();
     if (library_mode == false) {
