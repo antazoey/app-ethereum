@@ -5,6 +5,16 @@
 #include "eth_plugin_internal.h"
 #include "common_utils.h"
 
+// ABI array lengths are 32-byte words; reject values that don't fit a u16
+// instead of silently truncating them
+static bool get_word_u16(const uint8_t *parameter, uint16_t *out) {
+    if (allzeroes(parameter, PARAMETER_LENGTH - sizeof(*out)) != 1) {
+        return false;
+    }
+    *out = U2BE(parameter, PARAMETER_LENGTH - sizeof(*out));
+    return true;
+}
+
 // ABI dynamic offsets are 32-byte words; reject values that don't fit a u32
 // instead of silently truncating them
 static bool get_word_u32(const uint8_t *parameter, uint32_t *out) {
@@ -88,8 +98,11 @@ static void handle_batch_transfer(ethPluginProvideParameter_t *msg, erc1155_cont
                 msg->result = ETH_PLUGIN_RESULT_ERROR;
                 break;
             }
-            context->ids_array_len =
-                U2BE(msg->parameter, PARAMETER_LENGTH - sizeof(context->ids_array_len));
+            if (!get_word_u16(msg->parameter, &context->ids_array_len)) {
+                PRINTF("Token ids array too long!\n");
+                msg->result = ETH_PLUGIN_RESULT_ERROR;
+                break;
+            }
             context->batch_displayed = (context->ids_array_len > ERC1155_BATCH_DISPLAY_MAX)
                                            ? ERC1155_BATCH_DISPLAY_MAX
                                            : (uint8_t) context->ids_array_len;
@@ -118,12 +131,19 @@ static void handle_batch_transfer(ethPluginProvideParameter_t *msg, erc1155_cont
                 msg->result = ETH_PLUGIN_RESULT_ERROR;
                 break;
             }
-            context->values_array_len =
-                U2BE(msg->parameter, PARAMETER_LENGTH - sizeof(context->values_array_len));
-            if (context->values_array_len != context->array_index) {
-                PRINTF("Token ids and values array sizes mismatch!");
+            if (!get_word_u16(msg->parameter, &context->values_array_len)) {
+                PRINTF("Values array too long!\n");
+                msg->result = ETH_PLUGIN_RESULT_ERROR;
+                break;
             }
-            context->next_param = VALUE;
+            if (context->values_array_len != context->array_index) {
+                // ERC-1155 requires the two arrays to be the same length
+                PRINTF("Token ids and values array sizes mismatch!\n");
+                msg->result = ETH_PLUGIN_RESULT_ERROR;
+                break;
+            }
+            // An empty batch has nothing to consume in VALUE
+            context->next_param = (context->values_array_len == 0) ? NONE : VALUE;
             // set to zero for next step
             context->array_index = 0;
             explicit_bzero(&context->value, sizeof(context->value));
