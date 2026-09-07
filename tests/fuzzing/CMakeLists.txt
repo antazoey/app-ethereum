@@ -56,6 +56,7 @@ target_include_directories(
          ${APP_SRC}/features/sign_message_eip712_common
          ${APP_SRC}/features/sign_message_eip712
          ${APP_SRC}/features/set_plugin
+         ${APP_SRC}/features/perform_privacy_operation
          ${APP_SRC}/plugins
          ${APP_SRC}/plugins/eth2
          ${APP_SRC}/plugins/eip7002
