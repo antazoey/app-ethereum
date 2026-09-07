@@ -1,6 +1,7 @@
 #include <setjmp.h>
 #include "fuzz_utils.h"
 #include "mocks.h"
+#include "commands_7702.h"
 
 int fuzzEIP7702(const uint8_t *data, size_t size) {
     size_t offset = 0;

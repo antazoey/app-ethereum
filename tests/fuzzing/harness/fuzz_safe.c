@@ -3,6 +3,7 @@
 #include "mocks.h"
 
 #include "safe_descriptor.h"
+#include "signer_descriptor.h"
 
 int fuzzSafeCmd(const uint8_t *data, size_t size) {
     buffer_t buf = {.ptr = (uint8_t *) data, .size = size, .offset = 0};
@@ -13,7 +14,8 @@ int fuzzSafeCmd(const uint8_t *data, size_t size) {
 int fuzzSignerCmd(const uint8_t *data, size_t size) {
     if (size < 3) return 0;
     safe_descriptor_t desc = {
-        .address = "AAAAAAAAAAAAAAAAAAAA",
+        .address = {'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A',
+                    'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A'},
         .threshold = data[0] % 100,
         .signers_count = data[1] % 100,
         .role = data[2] % 2,
