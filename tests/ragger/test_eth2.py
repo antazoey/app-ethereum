@@ -5,21 +5,46 @@ from pathlib import Path
 from ragger.navigator.navigation_scenario import NavigateWithScenario
 from web3 import Web3
 
+from constants import ABIS_FOLDER
 from client.client import EthAppClient
 import client.response_parser as ResponseParser
 from client.utils import recover_transaction
-from constants import ABIS_FOLDER
 
 
 BEACON_DEPOSIT_CONTRACT_ADDR = bytes.fromhex("00000000219ab540356cBB839Cbe05303d7705Fa")
 BLS_WITHDRAWAL_PREFIX = 0x00
 BIP32_PATH = "m/44'/60'/0'/0/0"
+WEI_PER_GWEI = 10 ** 9
+
+
+def _sha256(*parts: bytes) -> bytes:
+    digest = hashlib.sha256()
+    for part in parts:
+        digest.update(part)
+    return digest.digest()
+
+
+def deposit_data_root(pubkey: bytes, credentials: bytes, amount_gwei: int, signature: bytes) -> bytes:
+    """SSZ hash_tree_root of the DepositData container.
+
+    {pubkey: Bytes48, withdrawal_credentials: Bytes32, amount: uint64,
+     signature: Bytes96}: each field is the root of its own zero-padded 32-byte
+    chunks, and the four leaves are merkleised into a two-level tree. This is
+    what the deposit contract commits to, and what the app now recomputes
+    before presenting the deposit as validated.
+    """
+    pubkey_root = _sha256(pubkey, bytes(64 - len(pubkey)))
+    signature_root = _sha256(_sha256(signature[:64]), _sha256(signature[64:], bytes(32)))
+    return _sha256(
+        _sha256(pubkey_root, credentials),
+        _sha256(amount_gwei.to_bytes(8, "little") + bytes(24), signature_root),
+    )
 
 def test_eth2_deposit(scenario_navigator: NavigateWithScenario) -> None:
     app_client = EthAppClient(scenario_navigator.backend)
     with app_client.get_eth2_public_addr(display=False):
         pass
-    with Path(f"{ABIS_FOLDER}/beacon_deposit.abi.json").open() as f:
+    with Path(f"{ABIS_FOLDER}/beacon_deposit.abi.json").open(encoding="utf-8") as f:
         contract = Web3().eth.contract(
             abi=json.load(f),
             address=bytes.fromhex("23F8abfC2824C397cCB3DA89ae772984107dDB99"),
@@ -27,12 +52,13 @@ def test_eth2_deposit(scenario_navigator: NavigateWithScenario) -> None:
     # https://github.com/ethereum/consensus-specs/blob/master/specs/phase0/validator.md#withdrawal-credentials
     credentials = bytearray(hashlib.sha256(app_client.response().data).digest())
     credentials[0] = BLS_WITHDRAWAL_PREFIX
-    data = contract.encode_abi("deposit", [
-        bytes.fromhex("a377e13e3b146513c0c9dd5231ced86a21597e5b83fa83ac8c27c4620f180c151d3e709107d73257fa451c58149e4065"),
-        credentials,
-        bytes.fromhex("00") * 96,
-        bytes.fromhex("4f1f479ababcef72faa5f9acf66faec651d143bc76f3880d0a25b72557bfd70a"),
-    ])
+    pubkey = bytes.fromhex("a377e13e3b146513c0c9dd5231ced86a21597e5b83fa83ac8c27c4620f180c151d3e709107d73257fa451c58149e4065")
+    signature = bytes.fromhex("00") * 96
+    value = Web3.to_wei(1.23035, "ether")
+    # The root has to commit to the fields the device is shown, otherwise the
+    # plugin refuses the deposit
+    root = deposit_data_root(pubkey, bytes(credentials), value // WEI_PER_GWEI, signature)
+    data = contract.encode_abi("deposit", [pubkey, credentials, signature, root])
     tx_params = {
         "chainId": 1,
         "nonce": 27,
@@ -40,7 +66,7 @@ def test_eth2_deposit(scenario_navigator: NavigateWithScenario) -> None:
         "maxFeePerGas": Web3.to_wei(0.292821186, "gwei"),
         "gas": 74265,
         "to": BEACON_DEPOSIT_CONTRACT_ADDR,
-        "value": Web3.to_wei(1.23035, "ether"),
+        "value": value,
         "data": data,
     }
     with app_client.sign(BIP32_PATH, tx_params):

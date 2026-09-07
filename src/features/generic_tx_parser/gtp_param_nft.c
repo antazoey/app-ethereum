@@ -4,6 +4,7 @@
 #include "gtp_field_table.h"
 #include "tlv_library.h"
 #include "tlv_apdu.h"
+#include "tx_ctx.h"
 
 #define PARAM_NFT_TAGS(X)                                    \
     X(0x00, TAG_VERSION, handle_version, ENFORCE_UNIQUE_TAG) \
@@ -47,6 +48,10 @@ bool format_param_nft(const s_param_nft *param, const char *name) {
     uint8_t collection_idx;
     uint8_t addr_buf[ADDRESS_LENGTH];
     char tmp[80];
+    uint64_t chain_id;
+
+    if (get_current_tx_info() == NULL) return false;
+    chain_id = get_current_tx_info()->chain_id;
 
     if ((ret = value_get(&param->collection, &collections))) {
         if ((ret = value_get(&param->id, &ids))) {
@@ -64,7 +69,8 @@ bool format_param_nft(const s_param_nft *param, const char *name) {
                                           sizeof(addr_buf));
                         if ((asset = (const nftInfo_t *) get_asset_info_by_type_and_addr(
                                  ASSET_TYPE_NFT,
-                                 addr_buf)) == NULL) {
+                                 addr_buf,
+                                 chain_id)) == NULL) {
                             ret = false;
                             break;
                         }

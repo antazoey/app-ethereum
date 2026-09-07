@@ -1,10 +1,14 @@
 #include "manage_asset_info.h"
+#include "network.h"  // get_tx_chain_id
 
 void forget_known_assets(void) {
     memset(tmpCtx.transactionContext.assetSet, false, MAX_ASSETS);
     memset(tmpCtx.transactionContext.assetType,
            ASSET_TYPE_NONE,
            sizeof(tmpCtx.transactionContext.assetType));
+    memset(tmpCtx.transactionContext.assetChainId,
+           0,
+           sizeof(tmpCtx.transactionContext.assetChainId));
     tmpCtx.transactionContext.currentAssetIndex = 0;
 }
 
@@ -22,15 +26,16 @@ static bool asset_info_is_set(int index) {
     return tmpCtx.transactionContext.assetSet[index];
 }
 
-int get_asset_index_by_type_and_addr(e_asset_type type, const uint8_t *addr) {
+int get_asset_index_by_type_and_addr(e_asset_type type, const uint8_t *addr, uint64_t chain_id) {
     if ((type == ASSET_TYPE_NONE) || (addr == NULL)) {
         return -1;
     }
     // The address compare works for both union members; only compare slots of
-    // the requested kind
+    // the requested kind, provided for the chain being signed for
     for (int i = 0; i < MAX_ASSETS; i++) {
         extraInfo_t *asset = get_asset_info(i);
         if (asset_info_is_set(i) && (tmpCtx.transactionContext.assetType[i] == type) &&
+            (tmpCtx.transactionContext.assetChainId[i] == chain_id) &&
             (memcmp(asset->token.address, addr, ADDRESS_LENGTH) == 0)) {
             PRINTF("Asset found at index %d\n", i);
             return i;
@@ -39,8 +44,30 @@ int get_asset_index_by_type_and_addr(e_asset_type type, const uint8_t *addr) {
     return -1;
 }
 
-extraInfo_t *get_asset_info_by_type_and_addr(e_asset_type type, const uint8_t *addr) {
-    return get_asset_info(get_asset_index_by_type_and_addr(type, addr));
+extraInfo_t *get_asset_info_by_type_and_addr(e_asset_type type,
+                                             const uint8_t *addr,
+                                             uint64_t chain_id) {
+    return get_asset_info(get_asset_index_by_type_and_addr(type, addr, chain_id));
+}
+
+bool has_asset_info_for_current_tx(e_asset_type type, const uint8_t *addr) {
+    uint64_t chain_id = get_tx_chain_id();
+
+    if ((type == ASSET_TYPE_NONE) || (addr == NULL)) {
+        return false;
+    }
+    if (chain_id != 0) {
+        // The chain is known: nothing to relax
+        return get_asset_index_by_type_and_addr(type, addr, chain_id) != -1;
+    }
+    for (int i = 0; i < MAX_ASSETS; i++) {
+        extraInfo_t *asset = get_asset_info(i);
+        if (asset_info_is_set(i) && (tmpCtx.transactionContext.assetType[i] == type) &&
+            (memcmp(asset->token.address, addr, ADDRESS_LENGTH) == 0)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 extraInfo_t *get_current_asset_info(void) {
@@ -57,16 +84,19 @@ void reset_current_asset_info(void) {
     if (index < MAX_ASSETS) {
         tmpCtx.transactionContext.assetSet[index] = false;
         tmpCtx.transactionContext.assetType[index] = ASSET_TYPE_NONE;
+        tmpCtx.transactionContext.assetChainId[index] = 0;
     }
 }
 
-void validate_current_asset_info(e_asset_type type) {
+void validate_current_asset_info(e_asset_type type, uint64_t chain_id) {
     uint8_t index = tmpCtx.transactionContext.currentAssetIndex;
 
     if (index < MAX_ASSETS) {
-        // mark it as set, recording what was actually authenticated into it
+        // mark it as set, recording what was actually authenticated into it and
+        // the chain it was signed for
         tmpCtx.transactionContext.assetSet[index] = true;
         tmpCtx.transactionContext.assetType[index] = type;
+        tmpCtx.transactionContext.assetChainId[index] = chain_id;
     }
     // increment index
     tmpCtx.transactionContext.currentAssetIndex = (index + 1) % MAX_ASSETS;

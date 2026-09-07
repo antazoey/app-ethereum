@@ -524,6 +524,45 @@ static s_amount_join *get_amount_join(uint8_t token_idx) {
 }
 
 /**
+ * Resolve the token metadata the current amount-join must render
+ *
+ * The slot is named by an index carried in the filter, not by an address, so
+ * the chain-bound lookup of get_asset_index_by_type_and_addr() is bypassed
+ * here: the slot content has to be validated on the spot. extraInfo_t is an
+ * untagged union whose contract address is common to both members, so the
+ * address comparison in update_amount_join() cannot tell an NFT descriptor, or
+ * another chain's token, from the token this message is about.
+ *
+ * @param[out] token the slot's token metadata, NULL if the slot holds nothing
+ * @return whether the slot content may be used
+ */
+static bool get_amount_join_token(const tokenDefinition_t **token) {
+    uint8_t idx = ui_ctx->amount.idx;
+
+    *token = NULL;
+    if (idx >= MAX_ASSETS) {
+        return false;
+    }
+    if (!tmpCtx.transactionContext.assetSet[idx]) {
+        // No metadata provided for this join: rendered without a ticker
+        return true;
+    }
+    if (tmpCtx.transactionContext.assetType[idx] != ASSET_TYPE_ERC20) {
+        PRINTF("ERROR: amount-join slot %u does not hold token metadata!\n", idx);
+        return false;
+    }
+    if (tmpCtx.transactionContext.assetChainId[idx] != eip712_context->chain_id) {
+        PRINTF("ERROR: amount-join slot %u holds metadata for chain %llu, message is on %llu!\n",
+               idx,
+               tmpCtx.transactionContext.assetChainId[idx],
+               eip712_context->chain_id);
+        return false;
+    }
+    *token = &tmpCtx.transactionContext.extraInfo[idx].token;
+    return true;
+}
+
+/**
  * Format given data as an amount with its ticker and value with correct decimals
  *
  * @return whether it was successful or not
@@ -532,8 +571,8 @@ static bool ui_712_format_amount_join(void) {
     const tokenDefinition_t *token = NULL;
     s_amount_join *amount_join;
 
-    if (tmpCtx.transactionContext.assetSet[ui_ctx->amount.idx]) {
-        token = &tmpCtx.transactionContext.extraInfo[ui_ctx->amount.idx].token;
+    if (!get_amount_join_token(&token)) {
+        return false;
     }
     if ((amount_join = get_amount_join(ui_ctx->amount.idx)) == NULL) {
         return false;
@@ -584,9 +623,10 @@ static bool update_amount_join(const uint8_t *data, uint8_t length) {
     const tokenDefinition_t *token = NULL;
     s_amount_join *amount_join;
 
-    if (tmpCtx.transactionContext.assetSet[ui_ctx->amount.idx]) {
-        token = &tmpCtx.transactionContext.extraInfo[ui_ctx->amount.idx].token;
-    } else {
+    if (!get_amount_join_token(&token)) {
+        return false;
+    }
+    if (token == NULL) {
         if (tmpCtx.transactionContext.currentAssetIndex == ui_ctx->amount.idx) {
             // So that the following amount-join find their tokens in the expected indices
             tmpCtx.transactionContext.currentAssetIndex =

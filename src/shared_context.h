@@ -75,7 +75,6 @@ typedef enum {
     PLUGIN_CTX_PLUGIN,    // pluginContext is active (post-INIT_CONTRACT)
 } plugin_ctx_mode_t;
 
-
 typedef struct tokenContext_t {
     char pluginName[PLUGIN_ID_LENGTH];
 
@@ -135,6 +134,10 @@ typedef struct transactionContext_t {
     // Kind of descriptor authenticated into each slot, set only once the
     // signature check passes. Parallel to extraInfo/assetSet.
     e_asset_type assetType[MAX_ASSETS];
+    // Chain the descriptor in each slot was signed for. Signed metadata is
+    // chain-specific, so a lookup must match it and not the address alone.
+    // Parallel to extraInfo/assetSet.
+    uint64_t assetChainId[MAX_ASSETS];
     uint8_t currentAssetIndex;
 } transactionContext_t;
 

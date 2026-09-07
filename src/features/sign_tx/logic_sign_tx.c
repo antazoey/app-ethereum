@@ -384,8 +384,9 @@ __attribute__((noinline)) static uint16_t finalize_parsing_helper(const txContex
             if (pluginFinalize.tokenLookup1 != NULL) {
                 PRINTF("Lookup1: %.*H\n", ADDRESS_LENGTH, pluginFinalize.tokenLookup1);
                 // Remember which slot matched so the review renders it
-                int idx =
-                    get_asset_index_by_type_and_addr(expected_type, pluginFinalize.tokenLookup1);
+                int idx = get_asset_index_by_type_and_addr(expected_type,
+                                                           pluginFinalize.tokenLookup1,
+                                                           chain_id);
                 if (idx >= 0) {
                     pluginProvideInfo.item1 = &tmpCtx.transactionContext.extraInfo[idx];
                     dataContext.tokenContext.pluginAssetSlot1 = (uint8_t) (idx + 1);
@@ -394,8 +395,9 @@ __attribute__((noinline)) static uint16_t finalize_parsing_helper(const txContex
             }
             if (pluginFinalize.tokenLookup2 != NULL) {
                 PRINTF("Lookup2: %.*H\n", ADDRESS_LENGTH, pluginFinalize.tokenLookup2);
-                int idx =
-                    get_asset_index_by_type_and_addr(expected_type, pluginFinalize.tokenLookup2);
+                int idx = get_asset_index_by_type_and_addr(expected_type,
+                                                           pluginFinalize.tokenLookup2,
+                                                           chain_id);
                 if (idx >= 0) {
                     pluginProvideInfo.item2 = &tmpCtx.transactionContext.extraInfo[idx];
                     dataContext.tokenContext.pluginAssetSlot2 = (uint8_t) (idx + 1);
