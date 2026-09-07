@@ -11,7 +11,12 @@ uint16_t handle_provide_erc20_token_information(const uint8_t *workBuffer,
     uint8_t tickerLength;
     uint64_t chain_id;
     uint8_t hash[INT256_LENGTH];
-    tokenDefinition_t *token = &get_current_asset_info()->token;
+    tokenDefinition_t *token;
+
+    // Clear the whole slot first: it rotates and may still hold a
+    // differently typed descriptor whose bytes a partial parse would inherit.
+    reset_current_asset_info();
+    token = &get_current_asset_info()->token;
 
     PRINTF("Provisioning currentAssetIndex %d\n", tmpCtx.transactionContext.currentAssetIndex);
 
@@ -58,7 +63,7 @@ uint16_t handle_provide_erc20_token_information(const uint8_t *workBuffer,
     }
 
     G_io_tx_buffer[0] = tmpCtx.transactionContext.currentAssetIndex;
-    validate_current_asset_info();
+    validate_current_asset_info(ASSET_TYPE_ERC20);
     *tx += 1;
     return SWO_SUCCESS;
 }

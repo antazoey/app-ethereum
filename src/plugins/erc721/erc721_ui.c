@@ -83,6 +83,15 @@ static void set_approval_for_all_ui(ethQueryContractUI_t *msg, erc721_context_t 
 static void set_transfer_ui(ethQueryContractUI_t *msg, erc721_context_t *context) {
     switch (msg->screenIndex) {
         case 0:
+            strlcpy(msg->title, "NFT Owner", msg->titleLength);
+            if (!getEthDisplayableAddress(context->ownerAddress,
+                                          msg->msg,
+                                          msg->msgLength,
+                                          chainConfig->chainId)) {
+                msg->result = ETH_PLUGIN_RESULT_ERROR;
+            }
+            break;
+        case 1:
             strlcpy(msg->title, "To", msg->titleLength);
             if (!getEthDisplayableAddress(context->address,
                                           msg->msg,
@@ -91,11 +100,11 @@ static void set_transfer_ui(ethQueryContractUI_t *msg, erc721_context_t *context
                 msg->result = ETH_PLUGIN_RESULT_ERROR;
             }
             break;
-        case 1:
+        case 2:
             strlcpy(msg->title, "Collection Name", msg->titleLength);
             strlcpy(msg->msg, msg->item1->nft.collectionName, msg->msgLength);
             break;
-        case 2:
+        case 3:
             strlcpy(msg->title, "NFT Address", msg->titleLength);
             if (!getEthDisplayableAddress(msg->item1->nft.contractAddress,
                                           msg->msg,
@@ -104,7 +113,7 @@ static void set_transfer_ui(ethQueryContractUI_t *msg, erc721_context_t *context
                 msg->result = ETH_PLUGIN_RESULT_ERROR;
             }
             break;
-        case 3:
+        case 4:
             strlcpy(msg->title, "NFT ID", msg->titleLength);
             if (!uint256_to_decimal(context->tokenId,
                                     sizeof(context->tokenId),
@@ -113,6 +122,11 @@ static void set_transfer_ui(ethQueryContractUI_t *msg, erc721_context_t *context
                 msg->result = ETH_PLUGIN_RESULT_ERROR;
             }
             break;
+        case 5:
+            // Requested by finalize only for a non-empty payload
+            strlcpy(msg->title, "Transfer With Data", msg->titleLength);
+            snprintf(msg->msg, msg->msgLength, "%u bytes", (unsigned) context->data_length);
+            break;
         default:
             PRINTF("Unsupported screen index %d\n", msg->screenIndex);
             msg->result = ETH_PLUGIN_RESULT_ERROR;
@@ -120,8 +134,24 @@ static void set_transfer_ui(ethQueryContractUI_t *msg, erc721_context_t *context
     }
 }
 
+// The metadata rendered must describe the called contract; fail closed on any
+// mismatch instead of showing a stale extraInfo slot
+static bool metadata_matches_destination(const ethQueryContractUI_t *msg) {
+    if ((msg->item1 == NULL) || (msg->txContent == NULL)) {
+        return false;
+    }
+    return memcmp(msg->item1->nft.contractAddress, msg->txContent->destination, ADDRESS_LENGTH) ==
+           0;
+}
+
 void handle_query_contract_ui_721(ethQueryContractUI_t *msg) {
     erc721_context_t *context = (erc721_context_t *) msg->pluginContext;
+
+    if (!metadata_matches_destination(msg)) {
+        PRINTF("NFT metadata does not describe the called contract!\n");
+        msg->result = ETH_PLUGIN_RESULT_ERROR;
+        return;
+    }
 
     msg->result = ETH_PLUGIN_RESULT_OK;
     switch (context->selectorIndex) {

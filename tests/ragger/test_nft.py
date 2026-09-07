@@ -45,10 +45,15 @@ class NFTCollection:
 class Action:
     fn_name: str
     fn_args: list[Any]
+    # Snapshot directory suffix. Overloads of the same function need distinct
+    # labels: safeTransferFrom with and without a receiver payload used to share
+    # one directory, which only passed because the payload was not displayed.
+    label: str
 
-    def __init__(self, fn_name: str, fn_args: list[Any]):
+    def __init__(self, fn_name: str, fn_args: list[Any], label: Optional[str] = None):
         self.fn_name = fn_name
         self.fn_args = fn_args
+        self.label = label if label is not None else fn_name
 
 
 def common_test_nft(scenario_navigator: NavigateWithScenario,
@@ -104,7 +109,7 @@ def common_test_nft(scenario_navigator: NavigateWithScenario,
     app_client.provide_nft_metadata(collec.name, collec.addr, collec.chain_id)
 
     with app_client.sign(BIP32_PATH, tx_params):
-        test_name += f"_{action.fn_name}_{str(collec.chain_id)}"
+        test_name += f"_{action.label}_{str(collec.chain_id)}"
         if reject:
             scenario_navigator.review_reject(test_name=test_name)
         elif simu_params is not None or gating_params is not None:
@@ -157,7 +162,7 @@ collecs_721 = [
                   contract_erc721),
 ]
 actions_721 = [
-    Action("safeTransferFrom", [FROM, TO, NFTS[0][0], DATA]),
+    Action("safeTransferFrom", [FROM, TO, NFTS[0][0], DATA], "safeTransferFromData"),
     Action("safeTransferFrom", [FROM, TO, NFTS[0][0]]),
     Action("transferFrom", [FROM, TO, NFTS[0][0]]),
     Action("approve", [TO, NFTS[0][0]]),

@@ -372,18 +372,33 @@ __attribute__((noinline)) static uint16_t finalize_parsing_helper(const txContex
         // Lookup tokens if requested
         ethPluginProvideInfo_t pluginProvideInfo;
         eth_plugin_prepare_provide_info(&pluginProvideInfo);
+        dataContext.tokenContext.pluginAssetSlot1 = 0;
+        dataContext.tokenContext.pluginAssetSlot2 = 0;
         if ((pluginFinalize.tokenLookup1 != NULL) || (pluginFinalize.tokenLookup2 != NULL)) {
+            // NFT plugins read item1 as nftInfo_t, others as tokenDefinition_t;
+            // the expected kind is derived from the active plugin
+            e_asset_type expected_type =
+                ((pluginType == PLUGIN_TYPE_ERC721) || (pluginType == PLUGIN_TYPE_ERC1155))
+                    ? ASSET_TYPE_NFT
+                    : ASSET_TYPE_ERC20;
             if (pluginFinalize.tokenLookup1 != NULL) {
                 PRINTF("Lookup1: %.*H\n", ADDRESS_LENGTH, pluginFinalize.tokenLookup1);
-                pluginProvideInfo.item1 = get_asset_info_by_addr(pluginFinalize.tokenLookup1);
-                if (pluginProvideInfo.item1 != NULL) {
+                // Remember which slot matched so the review renders it
+                int idx =
+                    get_asset_index_by_type_and_addr(expected_type, pluginFinalize.tokenLookup1);
+                if (idx >= 0) {
+                    pluginProvideInfo.item1 = &tmpCtx.transactionContext.extraInfo[idx];
+                    dataContext.tokenContext.pluginAssetSlot1 = (uint8_t) (idx + 1);
                     PRINTF("Token1 ticker: %s\n", pluginProvideInfo.item1->token.ticker);
                 }
             }
             if (pluginFinalize.tokenLookup2 != NULL) {
                 PRINTF("Lookup2: %.*H\n", ADDRESS_LENGTH, pluginFinalize.tokenLookup2);
-                pluginProvideInfo.item2 = get_asset_info_by_addr(pluginFinalize.tokenLookup2);
-                if (pluginProvideInfo.item2 != NULL) {
+                int idx =
+                    get_asset_index_by_type_and_addr(expected_type, pluginFinalize.tokenLookup2);
+                if (idx >= 0) {
+                    pluginProvideInfo.item2 = &tmpCtx.transactionContext.extraInfo[idx];
+                    dataContext.tokenContext.pluginAssetSlot2 = (uint8_t) (idx + 1);
                     PRINTF("Token2 ticker: %s\n", pluginProvideInfo.item2->token.ticker);
                 }
             }
@@ -429,6 +444,11 @@ __attribute__((noinline)) static uint16_t finalize_parsing_helper(const txContex
             PRINTF("Plugin swap_with_calldata fell back for UI with success\n");
             // We are not bling signing, the data has been validated by the plugin
             tmpContent.txContent.dataPresent = false;
+        } else {
+            // A plugin that fell back produced no UI items; hand the transaction
+            // to the standard review path instead of an empty plugin review
+            PRINTF("Plugin fell back, reverting to the generic transaction review\n");
+            pluginType = PLUGIN_TYPE_NONE;
         }
     }
 
