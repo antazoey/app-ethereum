@@ -165,7 +165,10 @@ static void set_batch_transfer_ui(ethQueryContractUI_t *msg, erc1155_context_t *
                 bool show_value = (pair_offset % 2) == 1;
                 if (show_value) {
                     uint256_t v;
-                    convertUint256BE(context->batch_values[pair_idx], INT256_LENGTH, &v);
+                    if (!convertUint256BE(context->batch_values[pair_idx], INT256_LENGTH, &v)) {
+                        msg->result = ETH_PLUGIN_RESULT_ERROR;
+                        return;
+                    }
                     snprintf(msg->title, msg->titleLength, "Quantity #%d", pair_idx + 1);
                     if (!tostring256(&v, 10, msg->msg, msg->msgLength)) {
                         msg->result = ETH_PLUGIN_RESULT_ERROR;

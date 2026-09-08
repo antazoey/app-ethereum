@@ -30,7 +30,16 @@ DEFINE_TLV_PARSER(PARAM_RAW_TAGS, NULL, param_raw_tlv_parser)
 
 bool handle_param_raw_struct(const buffer_t *buf, s_param_raw_context *context) {
     TLV_reception_t received_tags;
-    return param_raw_tlv_parser(buf, context, &received_tags);
+    if (!param_raw_tlv_parser(buf, context, &received_tags)) {
+        return false;
+    }
+    // Enforce the sub-structure's mandatory tags: an empty or partial PARAM
+    // payload would otherwise parse fine and never appear in the review
+    if (!TLV_CHECK_RECEIVED_TAGS(received_tags, TAG_VERSION, TAG_VALUE)) {
+        PRINTF("Error: missing mandatory tag(s) in gtp_param_raw\n");
+        return false;
+    }
+    return true;
 }
 
 /**
@@ -84,7 +93,9 @@ static bool check_uint_constraint(const s_field *field, const uint256_t *value25
     for (s_field_constraint *c_node = field->constraints; c_node != NULL;
          c_node = (s_field_constraint *) c_node->node.next) {
         memset(&constraint, 0, sizeof(constraint));
-        convertUint256BE(c_node->value, c_node->size, &constraint);
+        if (!convertUint256BE(c_node->value, c_node->size, &constraint)) {
+            continue;
+        }
         if (equal256(value256, &constraint)) {
             return true;
         }
@@ -98,8 +109,19 @@ bool format_uint(const s_field *field,
                  char *buf,
                  size_t buf_size) {
     uint256_t value256 = {0};
+    const uint8_t zero = 0;
+    const uint8_t *value_ptr = value->ptr;
 
-    convertUint256BE(value->ptr, value->length, &value256);
+    if (value->length == 0) {
+        value_ptr = &zero;
+        value->length = 1;
+    } else if (value_ptr == NULL) {
+        return false;
+    }
+
+    if (!convertUint256BE(value_ptr, value->length, &value256)) {
+        return false;
+    }
 
     if (!apply_visibility_constraint(field,
                                      to_be_displayed,

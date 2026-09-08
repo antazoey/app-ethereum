@@ -1,76 +1,6 @@
+#include "os_print.h"
 #include "sol_typenames.h"
-#include "app_mem_utils.h"
-#include "mem_utils.h"
-#include "os_pic.h"
-#include "apdu_constants.h"  // APDU response codes
 #include "typed_data.h"
-#include "common_utils.h"  // ARRAY_SIZE
-
-typedef struct {
-    char *name;
-    e_type value;
-} s_sol_type;
-
-static s_sol_type *g_sol_types = NULL;
-
-/**
- * Initialize solidity typenames in memory
- *
- * @return whether the initialization went well or not
- */
-bool sol_typenames_init(void) {
-    uint8_t count = TYPES_COUNT - 1;  // because 0 is custom (so not solidity)
-
-    if (g_sol_types != NULL) {
-        sol_typenames_deinit();
-        return false;
-    }
-    if ((g_sol_types = APP_MEM_ALLOC(sizeof(*g_sol_types) * count)) == NULL) {
-        apdu_response_code = SWO_INSUFFICIENT_MEMORY;
-        return false;
-    }
-    for (int i = 0; i < count; ++i) {
-        g_sol_types[i].value = i + 1;
-        switch (g_sol_types[i].value) {
-            case TYPE_SOL_INT:
-                g_sol_types[i].name = APP_MEM_STRDUP("int");
-                break;
-            case TYPE_SOL_UINT:
-                g_sol_types[i].name = APP_MEM_STRDUP("uint");
-                break;
-            case TYPE_SOL_ADDRESS:
-                g_sol_types[i].name = APP_MEM_STRDUP("address");
-                break;
-            case TYPE_SOL_BOOL:
-                g_sol_types[i].name = APP_MEM_STRDUP("bool");
-                break;
-            case TYPE_SOL_STRING:
-                g_sol_types[i].name = APP_MEM_STRDUP("string");
-                break;
-            case TYPE_SOL_BYTES_FIX:
-            case TYPE_SOL_BYTES_DYN:
-                g_sol_types[i].name = APP_MEM_STRDUP("bytes");
-                break;
-            default:
-                apdu_response_code = SWO_INCORRECT_DATA;
-                return false;
-        }
-        if (g_sol_types[i].name == NULL) {
-            apdu_response_code = SWO_INSUFFICIENT_MEMORY;
-            return false;
-        }
-    }
-    return true;
-}
-
-void sol_typenames_deinit(void) {
-    if (g_sol_types != NULL) {
-        for (int i = 0; i < (TYPES_COUNT - 1); ++i) {
-            APP_MEM_FREE(g_sol_types[i].name);
-        }
-        APP_MEM_FREE_AND_NULL((void **) &g_sol_types);
-    }
-}
 
 /**
  * Get typename from a given field
@@ -79,11 +9,24 @@ void sol_typenames_deinit(void) {
  * @return typename or \ref NULL in case it wasn't found
  */
 const char *get_struct_field_sol_typename(const s_struct_712_field *field_ptr) {
-    for (int i = 0; i < (TYPES_COUNT - 1); ++i) {
-        if (field_ptr->type == g_sol_types[i].value) {
-            return g_sol_types[i].name;
+    if (field_ptr != NULL) {
+        switch (field_ptr->type) {
+            case TYPE_SOL_INT:
+                return "int";
+            case TYPE_SOL_UINT:
+                return "uint";
+            case TYPE_SOL_ADDRESS:
+                return "address";
+            case TYPE_SOL_BOOL:
+                return "bool";
+            case TYPE_SOL_STRING:
+                return "string";
+            case TYPE_SOL_BYTES_FIX:
+            case TYPE_SOL_BYTES_DYN:
+                return "bytes";
+            default:
+                PRINTF("Error: Unknown field type (%u)\n", field_ptr->type);
         }
     }
-    apdu_response_code = SWO_INCORRECT_DATA;
-    return NULL;  // Not found
+    return NULL;
 }

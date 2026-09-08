@@ -56,7 +56,9 @@ bool format_signed_int_be(const uint8_t *data,
     } else if (type_size <= sizeof(uv.value256)) {
         memset(tmp, 0xFF, sizeof(uv.value256) - length);
         memcpy(tmp + sizeof(uv.value256) - length, data, length);
-        convertUint256BE(tmp, sizeof(uv.value256), &uv.value256);
+        if (!convertUint256BE(tmp, sizeof(uv.value256), &uv.value256)) {
+            return false;
+        }
         return tostring256_signed(&uv.value256, 10, buf, buf_size);
     }
     PRINTF("Error: wrong int typesize (%u bytes)\n", type_size);

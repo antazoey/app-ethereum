@@ -320,13 +320,9 @@ static bool ux_init(bool fromPlugin, uint8_t title_len, uint8_t finish_len) {
     }
     // Compute the number of g_pairs to display
     nbPairs = getNbPairs(displayNetwork, fromPlugin);
-    if (nbPairs > UINT8_MAX) {
-        PRINTF("Error: Too many review pairs: %u\n", (unsigned) nbPairs);
-        goto error;
-    }
 
     // Initialize the buffers
-    if (!ui_pairs_init((uint8_t) nbPairs)) {
+    if (!ui_pairs_init(nbPairs)) {
         // Initialization failed, cleanup and return
         goto error;
     }

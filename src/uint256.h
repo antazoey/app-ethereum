@@ -56,4 +56,4 @@ bool tostring256_signed(const uint256_t *const number,
                         uint32_t base,
                         char *const out,
                         uint32_t out_length);
-void convertUint256BE(const uint8_t *const data, uint32_t length, uint256_t *const target);
+bool convertUint256BE(const uint8_t *const data, uint32_t length, uint256_t *const target);

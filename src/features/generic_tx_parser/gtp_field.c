@@ -31,6 +31,7 @@ static bool handle_param_type(const tlv_data_t *data, s_field_ctx *context);
 static bool handle_param(const tlv_data_t *data, s_field_ctx *context);
 static bool handle_param_visible(const tlv_data_t *data, s_field_ctx *context);
 static bool handle_param_constraint(const tlv_data_t *data, s_field_ctx *context);
+static bool field_common_handler(const tlv_data_t *data, s_field_ctx *context);
 
 // Define TLV tags for Field
 #define FIELD_TAGS(X)                                              \
@@ -42,7 +43,27 @@ static bool handle_param_constraint(const tlv_data_t *data, s_field_ctx *context
     X(0x05, TAG_CONSTRAINT, handle_param_constraint, ALLOW_MULTIPLE_TAG)
 
 // Generate TLV parser for Field
-DEFINE_TLV_PARSER(FIELD_TAGS, NULL, field_tlv_parser)
+DEFINE_TLV_PARSER(FIELD_TAGS, &field_common_handler, field_tlv_parser)
+
+/**
+ * Enforce that VERSION is the first tag of a FIELD payload.
+ *
+ * The fields hash authenticates the concatenation of raw FIELD payloads without
+ * their APDU length framing, so a host could otherwise move a field boundary by
+ * starting a payload with the trailing optional tags (VISIBLE/CONSTRAINT) of the
+ * previous field. VERSION is mandatory and cannot appear mid-struct, so requiring
+ * it first makes such reframed payloads unparsable.
+ */
+static bool field_common_handler(const tlv_data_t *data, s_field_ctx *context) {
+    // VERSION flag is only set after its handler runs, so when parsing the first tag
+    // VERSION has not been received yet; any other tag first means a reframed payload.
+    if (!TLV_CHECK_RECEIVED_TAGS(context->received_tags, TAG_VERSION) &&
+        (data->tag != TAG_VERSION)) {
+        PRINTF("Error: FIELD must start with VERSION (got tag 0x%x)\n", data->tag);
+        return false;
+    }
+    return true;
+}
 
 static bool handle_version(const tlv_data_t *data, s_field_ctx *context) {
     return tlv_get_uint8_range(data, &context->field->version, 0, UINT8_MAX);

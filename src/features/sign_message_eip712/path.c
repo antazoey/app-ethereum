@@ -180,18 +180,20 @@ static void remove_last_hash_ctx(void) {
  */
 static bool finalize_hash_depth(uint8_t *hash) {
     const s_hash_ctx *hash_ctx;
-    size_t hashed_bytes;
+    bool has_data;
 
     if ((hash_ctx = get_last_hash_ctx()) == NULL) {
         return false;
     }
-    hashed_bytes = hash_ctx->hash.blen;
+    // Whether anything was absorbed at this depth (cx_sha3_t.blen cannot tell
+    // full blocks apart from an empty context)
+    has_data = hash_ctx->has_data;
     // finalize hash
     if (finalize_hash((cx_hash_t *) &hash_ctx->hash, hash, KECCAK256_HASH_BYTESIZE) != true) {
         return false;
     }
     remove_last_hash_ctx();
-    return hashed_bytes > 0;
+    return has_data;
 }
 
 /**
@@ -200,7 +202,7 @@ static bool finalize_hash_depth(uint8_t *hash) {
  * @param[in] hash pointer to given hash
  */
 static bool feed_last_hash_depth(const uint8_t *hash) {
-    const s_hash_ctx *hash_ctx;
+    s_hash_ctx *hash_ctx;
 
     if ((hash_ctx = get_last_hash_ctx()) == NULL) {
         return false;
@@ -214,6 +216,7 @@ static bool feed_last_hash_depth(const uint8_t *hash) {
                          0) != CX_OK) {
         return false;
     }
+    hash_ctx->has_data = true;
     return true;
 }
 
@@ -818,6 +821,31 @@ bool path_exists_in_backup(const char *path, size_t length) {
         }
     }
     return true;
+}
+
+/**
+ * Count how many array levels of the field the path currently points to have a live
+ * array context (instantiated by P2_IMPL_ARRAY commands).
+ *
+ * @return number of active array levels for the current field
+ */
+uint8_t path_get_current_field_array_depth_count(void) {
+    uint8_t count = 0;
+    uint8_t field_path_index;
+
+    if ((path_struct == NULL) || (path_struct->depth_count == 0)) {
+        return 0;
+    }
+    field_path_index = path_struct->depth_count - 1;
+    // Array levels of the current field are the trailing stack entries with its
+    // path index; inner levels are pushed after outer ones.
+    for (int i = path_struct->array_depth_count - 1; i >= 0; --i) {
+        if (path_struct->array_depths[i].path_index != field_path_index) {
+            break;
+        }
+        count += 1;
+    }
+    return count;
 }
 
 /**
