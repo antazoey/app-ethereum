@@ -278,29 +278,30 @@ static bool format_bytes(const s_field *field,
                          size_t buf_size) {
     LEDGER_ASSERT(sizeof(strings.tmp.tmp) == buf_size, "Buffer too small for bytes formatting");
 
-    // "0x" prefix + two hex digits per byte + NULL terminator. Reject upfront
-    // so the rejection is self-documenting rather than implied by
-    // bytes_to_lowercase_hex's internal size check, and the caller gets a
-    // clean ERROR APDU instead of a silently truncated review screen.
-    const size_t needed = (size_t) 2 + (size_t) value->length * 2 + 1;
-    if (needed > buf_size) {
-        PRINTF("RAW BYTES value too long for display (%u > %u bytes)\n",
-               (unsigned) needed,
-               (unsigned) buf_size);
-        return false;
-    }
-    buf[0] = '0';
-    buf[1] = 'x';
-    if (bytes_to_lowercase_hex(buf + 2, buf_size - 2, value->ptr, value->length) != 0) {
-        return false;
-    }
-
     if (!apply_visibility_constraint(field,
                                      to_be_displayed,
                                      check_bytes_constraint(field, value))) {
         return false;
     }
+    if (!*to_be_displayed) {
+        return true;
+    }
 
+    buf[0] = '0';
+    buf[1] = 'x';
+    // needs "0x" + 2 hex chars per byte + NUL
+    if ((2 + (value->length * 2) + 1) > buf_size) {
+        // Does not fit: show as many leading bytes as possible, end with "..."
+        // keep room for "0x" (2), "..." (3) and NUL (1); 2 hex chars per byte
+        size_t max_bytes = (buf_size - 2 - 1 - 3) / 2;
+
+        if (bytes_to_lowercase_hex(buf + 2, (max_bytes * 2) + 1, value->ptr, max_bytes) != 0) {
+            return false;
+        }
+        memmove(buf + 2 + (max_bytes * 2), "...", 4);  // "..." + NUL
+    } else if (bytes_to_lowercase_hex(buf + 2, buf_size - 2, value->ptr, value->length) != 0) {
+        return false;
+    }
     return true;
 }
 

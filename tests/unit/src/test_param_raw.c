@@ -660,17 +660,15 @@ static void test_raw_string_oversize_rejected(void **state) {
 }
 
 /**
- * @brief A BYTES value too long for the display buffer is rejected.
- *
- * format_bytes rejects on the declared length before reading the content.
+ * @brief A BYTES value at the constant-size limit is displayed in full.
  */
-static void test_raw_bytes_oversize_rejected(void **state) {
+static void test_raw_bytes_max_constant_displayed(void **state) {
     (void) state;
 
     s_param_raw param = {.version = 1,
                          .value = {.type_family = TF_BYTES,
                                    .source = SOURCE_CONSTANT,
-                                   .constant = {.size = SHARED_CTX_FIELD_1_SIZE / 2}}};
+                                   .constant = {.size = CALLDATA_CHUNK_SIZE}}};
     memset(param.value.constant.buf, 0xAB, sizeof(param.value.constant.buf));
 
     s_field field = {.param_type = PARAM_TYPE_RAW,
@@ -679,7 +677,17 @@ static void test_raw_bytes_oversize_rejected(void **state) {
                      .param_raw = param,
                      .name = "Data"};
 
-    assert_false(format_param_raw(&field));
+    char expected[2 + (CALLDATA_CHUNK_SIZE * 2) + 1] = "0x";
+    for (int i = 0; i < CALLDATA_CHUNK_SIZE; i++) {
+        strcat(expected, "ab");
+    }
+
+    expect_value(__wrap_add_to_field_table, param_type, field.param_type);
+    expect_string(__wrap_add_to_field_table, name, field.name);
+    expect_string(__wrap_add_to_field_table, value, expected);
+    will_return(__wrap_add_to_field_table, true);
+
+    assert_true(format_param_raw(&field));
 }
 
 /**
@@ -764,7 +772,7 @@ int main(void) {
         cmocka_unit_test(test_raw_bytes_must_be_invalid),
         cmocka_unit_test(test_raw_bytes_if_not_in_match),
         cmocka_unit_test(test_raw_bytes_if_not_in_no_match),
-        cmocka_unit_test(test_raw_bytes_oversize_rejected),
+        cmocka_unit_test(test_raw_bytes_max_constant_displayed),
         cmocka_unit_test(test_raw_bytes_prefix_constraint_no_match),
 
         // STRING tests
