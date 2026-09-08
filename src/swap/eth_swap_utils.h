@@ -25,6 +25,14 @@
 
 extern bool G_swap_checked;
 
+// Whether the transaction carried a data field. Never cleared afterwards,
+// unlike txContent.dataPresent which successful plugins clear for their UI.
+extern bool G_swap_tx_had_calldata;
+
+// Whether that calldata was checked against the exchange promise: the ERC-20
+// swap path, and the crosschain path once the calldata hash matches.
+extern bool G_swap_calldata_validated;
+
 typedef struct {
     char ticker[MAX_TICKER_LEN];
     uint8_t decimals;

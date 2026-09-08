@@ -204,6 +204,9 @@ void erc20_plugin_call(eth_plugin_msg_t message, void *parameters) {
                 }
                 swap_check_amount(buf);
                 G_swap_checked = true;
+                // transfer(address,uint256), no extra data, recipient, amount
+                // and token all matching: the only auto-signable calldata.
+                G_swap_calldata_validated = true;
             }
             msg->uiType = ETH_UI_TYPE_GENERIC;
             msg->result = ETH_PLUGIN_RESULT_OK;

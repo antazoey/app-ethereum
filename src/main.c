@@ -100,6 +100,8 @@ static void reset_app_context_ex(bool scrub_strings) {
     G_called_from_swap = false;
     G_swap_response_ready = false;
     G_swap_checked = false;
+    G_swap_tx_had_calldata = false;
+    G_swap_calldata_validated = false;
     pluginType = PLUGIN_TYPE_NONE;
 #ifdef HAVE_ETH2
     eth2WithdrawalIndex = 0;
