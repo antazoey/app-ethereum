@@ -44,6 +44,8 @@ customStatus_e custom_processor(txContext_t *context) {
          (context->txType == EIP7702 && context->currentField == EIP7702_RLP_DATA)) &&
         (context->currentFieldLength != 0)) {
         context->content->dataPresent = true;
+        // Plugins clear dataPresent for their own review; keep the raw fact
+        G_swap_tx_had_calldata = true;
         // If handling a new contract rather than a function call, abort immediately
         if (tmpContent.txContent.destinationLength == 0) {
             return CUSTOM_NOT_HANDLED;
@@ -302,7 +304,9 @@ __attribute__((noinline)) static uint16_t finalize_parsing_helper(const txContex
         PRINTF("Swap: chain ID mismatch, expected %llu, got %llu\n",
                G_swap_expected_chain_id,
                chain_id);
-        send_swap_error_simple(APDU_RESPONSE_MODE_CHECK_FAILED, SWAP_EC_ERROR_GENERIC, APP_CODE_DEFAULT);
+        send_swap_error_simple(APDU_RESPONSE_MODE_CHECK_FAILED,
+                               SWAP_EC_ERROR_GENERIC,
+                               APP_CODE_DEFAULT);
         // unreachable
         os_sched_exit(0);
     }
@@ -446,6 +450,7 @@ __attribute__((noinline)) static uint16_t finalize_parsing_helper(const txContex
             PRINTF("Plugin swap_with_calldata fell back for UI with success\n");
             // We are not bling signing, the data has been validated by the plugin
             tmpContent.txContent.dataPresent = false;
+            G_swap_calldata_validated = true;
         } else {
             // A plugin that fell back produced no UI items; hand the transaction
             // to the standard review path instead of an empty plugin review
@@ -609,8 +614,10 @@ uint16_t finalize_parsing(const txContext_t *context) {
                 // unreachable
                 os_sched_exit(0);
             }
-            if (tmpContent.txContent.dataPresent && (G_swap_mode == SWAP_MODE_STANDARD)) {
-                PRINTF("Unvalidated calldata is not allowed in standard swap\n");
+            // Calldata may only be auto-signed once checked against the swap
+            // promise, in any mode; plugins clear dataPresent for their own UI.
+            if (G_swap_tx_had_calldata && !G_swap_calldata_validated) {
+                PRINTF("Unvalidated calldata is not allowed in swap\n");
                 send_swap_error_simple(APDU_RESPONSE_MODE_CHECK_FAILED,
                                        SWAP_EC_ERROR_WRONG_METHOD,
                                        APP_CODE_DEFAULT);

@@ -27,6 +27,8 @@
 
 // Global flag indicating whether swap parameters have been verified
 bool G_swap_checked;
+bool G_swap_tx_had_calldata;
+bool G_swap_calldata_validated;
 
 /**
  * Helper function to parse a token asset info (ticker + decimals) from config buffer

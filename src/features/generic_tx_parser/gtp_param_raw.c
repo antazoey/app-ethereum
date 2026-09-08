@@ -229,34 +229,20 @@ static bool format_bool(const s_field *field,
 /**
  * @brief Check if a bytes value matches any of the field's constraints
  *
+ * Byte-level equality, like the string path: comparing formatted hex would
+ * depend on the display buffer fitting both operands.
+ *
  * @param field Field containing the constraints to check
  * @param value Value being formatted
- * @param formatted_buf Formatted buffer containing the hex string to check
  * @return true if value matches a constraint, false otherwise
  */
-static bool check_bytes_constraint(const s_field *field,
-                                   const s_parsed_value *value,
-                                   const char *formatted_buf) {
-    char constraint[sizeof(strings.tmp.tmp)] = {0};
-
+static bool check_bytes_constraint(const s_field *field, const s_parsed_value *value) {
     for (s_field_constraint *c_node = field->constraints; c_node != NULL;
          c_node = (s_field_constraint *) c_node->node.next) {
-        if (c_node->size > value->length) {
-            PRINTF("Warning: RAW BYTES constraint wrong size!\n");
+        if (c_node->size != value->length) {
             continue;
         }
-        if (sizeof(constraint) < 3) {
-            continue;
-        }
-        constraint[0] = '0';
-        constraint[1] = 'x';
-        if (bytes_to_lowercase_hex(constraint + 2,
-                                   sizeof(constraint) - 2,
-                                   c_node->value,
-                                   c_node->size) != 0) {
-            continue;
-        }
-        if (strcmp(formatted_buf, constraint) == 0) {
+        if (memcmp(c_node->value, value->ptr, c_node->size) == 0) {
             return true;
         }
     }
@@ -289,7 +275,7 @@ static bool format_bytes(const s_field *field,
 
     if (!apply_visibility_constraint(field,
                                      to_be_displayed,
-                                     check_bytes_constraint(field, value, buf))) {
+                                     check_bytes_constraint(field, value))) {
         return false;
     }
 
