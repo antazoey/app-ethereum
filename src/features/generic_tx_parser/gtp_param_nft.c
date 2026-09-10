@@ -4,6 +4,7 @@
 #include "gtp_field_table.h"
 #include "tlv_library.h"
 #include "tlv_apdu.h"
+#include "tx_ctx.h"
 
 #define PARAM_NFT_TAGS(X)                                    \
     X(0x00, TAG_VERSION, handle_version, ENFORCE_UNIQUE_TAG) \
@@ -34,7 +35,16 @@ DEFINE_TLV_PARSER(PARAM_NFT_TAGS, NULL, param_nft_tlv_parser)
 
 bool handle_param_nft_struct(const buffer_t *buf, s_param_nft_context *context) {
     TLV_reception_t received_tags;
-    return param_nft_tlv_parser(buf, context, &received_tags);
+    if (!param_nft_tlv_parser(buf, context, &received_tags)) {
+        return false;
+    }
+    // Enforce the sub-structure's mandatory tags: an empty or partial PARAM
+    // payload would otherwise parse fine and never appear in the review
+    if (!TLV_CHECK_RECEIVED_TAGS(received_tags, TAG_VERSION, TAG_ID, TAG_COLLECTION)) {
+        PRINTF("Error: missing mandatory tag(s) in gtp_param_nft\n");
+        return false;
+    }
+    return true;
 }
 
 bool format_param_nft(const s_param_nft *param, const char *name) {
@@ -47,6 +57,10 @@ bool format_param_nft(const s_param_nft *param, const char *name) {
     uint8_t collection_idx;
     uint8_t addr_buf[ADDRESS_LENGTH];
     char tmp[80];
+    uint64_t chain_id;
+
+    if (get_current_tx_info() == NULL) return false;
+    chain_id = get_current_tx_info()->chain_id;
 
     if ((ret = value_get(&param->collection, &collections))) {
         if ((ret = value_get(&param->id, &ids))) {
@@ -62,8 +76,10 @@ bool format_param_nft(const s_param_nft *param, const char *name) {
                                           collections.value[collection_idx].length,
                                           addr_buf,
                                           sizeof(addr_buf));
-                        if ((asset = (const nftInfo_t *) get_asset_info_by_addr(addr_buf)) ==
-                            NULL) {
+                        if ((asset = (const nftInfo_t *) get_asset_info_by_type_and_addr(
+                                 ASSET_TYPE_NFT,
+                                 addr_buf,
+                                 chain_id)) == NULL) {
                             ret = false;
                             break;
                         }

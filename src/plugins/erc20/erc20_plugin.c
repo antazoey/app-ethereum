@@ -8,6 +8,7 @@
 #include "utils.h"
 #include "calldata.h"
 #include "manage_asset_info.h"
+#include "network.h"
 #include "eth_swap_utils.h"
 #include "erc20_plugin.h"
 
@@ -99,13 +100,14 @@ void erc20_plugin_call(eth_plugin_msg_t message, void *parameters) {
                     msg->result = ETH_PLUGIN_RESULT_OK;
                     break;
 
-                default:
-                    if (msg->parameterOffset <= CALLDATA_SELECTOR_SIZE + CALLDATA_CHUNK_SIZE +
-                                                    (MAX_EXTRA_DATA_CHUNKS * CALLDATA_CHUNK_SIZE)) {
+                default: {
+                    const uint32_t extra_data_base =
+                        CALLDATA_SELECTOR_SIZE + (CALLDATA_CHUNK_SIZE * 2);
+                    if ((msg->parameterOffset >= extra_data_base) &&
+                        (msg->parameterOffset <=
+                         extra_data_base + sizeof(context->extra_data) - CALLDATA_CHUNK_SIZE)) {
                         // store extra data for possible later use
-                        size_t extra_data_offset =
-                            msg->parameterOffset -
-                            (CALLDATA_SELECTOR_SIZE + (CALLDATA_CHUNK_SIZE * 2));
+                        size_t extra_data_offset = msg->parameterOffset - extra_data_base;
                         memmove(context->extra_data + extra_data_offset,
                                 msg->parameter,
                                 CALLDATA_CHUNK_SIZE);
@@ -122,6 +124,7 @@ void erc20_plugin_call(eth_plugin_msg_t message, void *parameters) {
                         msg->result = ETH_PLUGIN_RESULT_ERROR;
                     }
                     break;
+                }
             }
         } break;
 
@@ -162,6 +165,18 @@ void erc20_plugin_call(eth_plugin_msg_t message, void *parameters) {
                     break;
                 }
 
+                // The token contract address is an optional field of the swap config: the
+                // CAL does not emit it yet, so only enforce the binding when it is present.
+                // Absent it, the token is still bound by ticker+decimals through the
+                // swap_check_amount() call below.
+                if (G_swap_has_expected_token_address &&
+                    (memcmp(msg->tokenLookup1, G_swap_expected_token_address, ADDRESS_LENGTH) !=
+                     0)) {
+                    PRINTF("erc20 swap: token contract does not match swap config\n");
+                    msg->result = ETH_PLUGIN_RESULT_ERROR;
+                    break;
+                }
+
                 if (!getEthDisplayableAddress(context->destinationAddress,
                                               buf,
                                               sizeof(buf),
@@ -171,8 +186,10 @@ void erc20_plugin_call(eth_plugin_msg_t message, void *parameters) {
                 }
                 swap_check_destination(buf);
 
-                if ((token_def = (const tokenDefinition_t *) get_asset_info_by_addr(
-                         msg->tokenLookup1)) == NULL) {
+                if ((token_def = (const tokenDefinition_t *) get_asset_info_by_type_and_addr(
+                         ASSET_TYPE_ERC20,
+                         msg->tokenLookup1,
+                         get_tx_chain_id())) == NULL) {
                     msg->result = ETH_PLUGIN_RESULT_ERROR;
                     break;
                 }
@@ -187,6 +204,9 @@ void erc20_plugin_call(eth_plugin_msg_t message, void *parameters) {
                 }
                 swap_check_amount(buf);
                 G_swap_checked = true;
+                // transfer(address,uint256), no extra data, recipient, amount
+                // and token all matching: the only auto-signable calldata.
+                G_swap_calldata_validated = true;
             }
             msg->uiType = ETH_UI_TYPE_GENERIC;
             msg->result = ETH_PLUGIN_RESULT_OK;

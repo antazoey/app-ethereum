@@ -42,6 +42,15 @@ void field_hash_deinit(void) {
 }
 
 /**
+ * Whether no field value is currently being streamed across APDU chunks
+ *
+ * @return whether the field hash context is idle
+ */
+bool field_hash_is_idle(void) {
+    return (fh != NULL) && (fh->state == FHS_IDLE);
+}
+
+/**
  * Special handling of the first chunk received from a field value
  *
  * @param[in] field_ptr pointer to the struct field definition
@@ -55,6 +64,7 @@ static const uint8_t *field_hash_prepare(const s_struct_712_field *field_ptr,
     fh->remaining_size = read_u16_be(data, 0);
     data += sizeof(uint16_t);
     *data_length -= sizeof(uint16_t);
+    fh->chunked = (fh->remaining_size != *data_length);
     fh->state = FHS_WAITING_FOR_MORE;
     if (IS_DYN(field_ptr->type)) {
         if (cx_keccak_init_no_throw(&global_sha3, 256) != CX_OK) {
@@ -145,6 +155,7 @@ static void field_hash_feed_parent(e_type field_type, const uint8_t *hash) {
     if (hash_ctx != NULL) {
         // continue the progressive hash on it
         hash_nbytes(hash, len, (cx_hash_t *) &hash_ctx->hash);
+        hash_ctx->has_data = true;
     }
     // deallocate it
     APP_MEM_FREE((void *) hash);
@@ -178,8 +189,11 @@ static bool field_hash_domain_special_fields(const s_struct_712_field *field_ptr
                 }
                 break;
             case TYPE_SOL_STRING:
-                // hardcoded check for their non-standard implementation
-                if ((data_length != strlen(ethermint_vc)) ||
+                // hardcoded check for their non-standard implementation; this
+                // function only sees the final chunk of a multi-chunk value, so a
+                // chunked string could end with "cosmos" while the signed value
+                // contains an attacker-chosen prefix.
+                if (fh->chunked || (data_length != strlen(ethermint_vc)) ||
                     (strncmp((char *) data, ethermint_vc, data_length) != 0)) {
                     apdu_response_code = SWO_INCORRECT_DATA;
                     PRINTF("Error: non standard verifyingContract\n");
@@ -195,6 +209,19 @@ static bool field_hash_domain_special_fields(const s_struct_712_field *field_ptr
         explicit_bzero(&eip712_context->contract_addr[data_length],
                        sizeof(eip712_context->contract_addr) - data_length);
     } else if (strcmp(key, "chainId") == 0) {
+        // The domain hash commits to the full field bytes; the auxiliary chain ID
+        // must match the same numeric value or filtering/network display would
+        // diverge from what is signed
+        if (data_length > sizeof(uint64_t)) {
+            uint8_t leading = data_length - sizeof(uint64_t);
+            if (!is_zeroes_buffer(data, leading)) {
+                PRINTF("Error: chainId too large\n");
+                apdu_response_code = SWO_INCORRECT_DATA;
+                return false;
+            }
+            data += leading;
+            data_length = sizeof(uint64_t);
+        }
         eip712_context->chain_id = u64_from_BE(data, data_length);
     }
     return true;
@@ -230,6 +257,7 @@ static bool field_hash_finalize(const s_struct_712_field *field_ptr,
             return false;
         }
     }
+    ui_712_check_field_filtering();
     path_advance(true);
     fh->state = FHS_IDLE;
     ui_712_finalize_field();
@@ -256,6 +284,15 @@ bool field_hash(const uint8_t *data, uint8_t data_length, bool partial) {
 
     // first packet for this frame
     if (first) {
+        // Every array level declared in the schema must have a live array context,
+        // otherwise the host could skip the array-size commands and inject the
+        // precomputed aggregate hash of hidden array contents as a base value.
+        if (field_ptr->type_is_array &&
+            (field_ptr->array_level_count != path_get_current_field_array_depth_count())) {
+            PRINTF("Error: value for array field with undeclared levels\n");
+            apdu_response_code = SWO_INCORRECT_DATA;
+            return false;
+        }
         if (!ui_712_show_raw_key(field_ptr)) {
             return false;
         }

@@ -205,6 +205,29 @@ uint16_t handle_eip712_filtering(uint8_t p1,
     if ((p2 != P2_FILT_ACTIVATE) && (ui_712_get_filtering_mode() != EIP712_FILTERING_FULL)) {
         return SWO_SUCCESS;
     }
+    // A path filter must arrive before the first byte of its field value: a filter
+    // installed mid-field would only apply to the remaining chunks while the earlier
+    // ones were already hashed unfiltered.
+    if ((p2 > P2_FILT_MESSAGE_INFO) && !field_hash_is_idle()) {
+        PRINTF("EIP-712 filter while a field value is being streamed\n");
+        apdu_response_code = SWO_COMMAND_NOT_ALLOWED;
+        apdu_reply(false);
+        return apdu_response_code;
+    }
+    // A non-discarded filter targets the field the path currently points to. If that
+    // field is an array whose levels were not yet instantiated by P2_IMPL_ARRAY
+    // commands, the filter would install its label/flags onto whatever comes next —
+    // including the field following an empty array.
+    if ((p2 > P2_FILT_MESSAGE_INFO) && (p1 != P1_DISCARDED)) {
+        const s_struct_712_field *field_ptr = path_get_field();
+        if ((field_ptr != NULL) && field_ptr->type_is_array &&
+            (field_ptr->array_level_count != path_get_current_field_array_depth_count())) {
+            PRINTF("EIP-712 filter for an uninstantiated array field\n");
+            apdu_response_code = SWO_INCORRECT_DATA;
+            apdu_reply(false);
+            return apdu_response_code;
+        }
+    }
     switch (p2) {
         case P2_FILT_ACTIVATE:
             if (!N_storage.verbose_eip712) {
@@ -293,6 +316,7 @@ uint16_t handle_eip712_filtering(uint8_t p1,
  */
 uint16_t handle_eip712_sign(const uint8_t *cdata, uint8_t length, uint32_t *flags) {
     bool ret = false;
+    bip32_path_t bip32;
 
     if (eip712_context == NULL) {
         apdu_response_code = SWO_COMMAND_NOT_ALLOWED;
@@ -305,15 +329,21 @@ uint16_t handle_eip712_sign(const uint8_t *cdata, uint8_t length, uint32_t *flag
              (path_get_field() != NULL)) {
         apdu_response_code = SWO_INCORRECT_DATA;
     } else if ((ui_712_get_filtering_mode() == EIP712_FILTERING_FULL) &&
-               (!ui_712_message_info_received() || (ui_712_remaining_filters() != 0))) {
+               (!ui_712_message_info_received() || (ui_712_remaining_filters() != 0) ||
+                ui_712_filtering_broken())) {
         PRINTF("%d EIP712 filters are missing\n", ui_712_remaining_filters());
         apdu_response_code = SWO_REFERENCED_DATA_NOT_FOUND;
     } else if (!all_calldata_info_processed() || (get_tx_ctx_count() != 0)) {
         PRINTF("Unprocessed calldata\n");
         apdu_response_code = SWO_REFERENCED_DATA_NOT_FOUND;
-    } else if (parseBip32(cdata, &length, &tmpCtx.messageSigningContext.bip32) == NULL) {
+    } else if (parseBip32(cdata, &length, &bip32) == NULL) {
         apdu_response_code = SWO_INCORRECT_DATA;
+    } else if (!eip712_sign_claim()) {
+        // The sign command is single-use: claimed before any mutation of tmpCtx,
+        // a replay while the review is on screen lands here.
+        apdu_response_code = SWO_COMMAND_NOT_ALLOWED;
     } else {
+        tmpCtx.messageSigningContext.bip32 = bip32;
         ret = true;
 #ifndef SCREEN_SIZE_WALLET
         if (!N_storage.verbose_eip712 && (ui_712_get_filtering_mode() == EIP712_FILTERING_BASIC)) {

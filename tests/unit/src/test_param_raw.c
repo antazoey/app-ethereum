@@ -660,6 +660,65 @@ static void test_raw_string_oversize_rejected(void **state) {
 }
 
 /**
+ * @brief A BYTES value at the constant-size limit is displayed in full.
+ */
+static void test_raw_bytes_max_constant_displayed(void **state) {
+    (void) state;
+
+    s_param_raw param = {.version = 1,
+                         .value = {.type_family = TF_BYTES,
+                                   .source = SOURCE_CONSTANT,
+                                   .constant = {.size = CALLDATA_CHUNK_SIZE}}};
+    memset(param.value.constant.buf, 0xAB, sizeof(param.value.constant.buf));
+
+    s_field field = {.param_type = PARAM_TYPE_RAW,
+                     .visibility = PARAM_VISIBILITY_ALWAYS,
+                     .constraints = NULL,
+                     .param_raw = param,
+                     .name = "Data"};
+
+    char expected[2 + (CALLDATA_CHUNK_SIZE * 2) + 1] = "0x";
+    for (int i = 0; i < CALLDATA_CHUNK_SIZE; i++) {
+        strcat(expected, "ab");
+    }
+
+    expect_value(__wrap_add_to_field_table, param_type, field.param_type);
+    expect_string(__wrap_add_to_field_table, name, field.name);
+    expect_string(__wrap_add_to_field_table, value, expected);
+    will_return(__wrap_add_to_field_table, true);
+
+    assert_true(format_param_raw(&field));
+}
+
+/**
+ * @brief A BYTES constraint that is only a prefix of the value does not match.
+ */
+static void test_raw_bytes_prefix_constraint_no_match(void **state) {
+    (void) state;
+
+    uint8_t data[4] = {0xAB, 0xCD, 0xEF, 0x01};
+    CREATE_BYTES_PARAM(param, data, sizeof(data));
+
+    // Constraint holds every byte but the last one
+    s_field_constraint *constraint = calloc(1, sizeof(s_field_constraint));
+    constraint->value = calloc(1, sizeof(data) - 1);
+    constraint->size = sizeof(data) - 1;
+    memcpy(constraint->value, data, sizeof(data) - 1);
+
+    s_field field = {.param_type = PARAM_TYPE_RAW,
+                     .visibility = PARAM_VISIBILITY_MUST_BE,
+                     .constraints = constraint,
+                     .param_raw = param,
+                     .name = "Data"};
+
+    // MUST_BE with no match: the transaction is rejected
+    assert_false(format_param_raw(&field));
+
+    free(constraint->value);
+    free(constraint);
+}
+
+/**
  * @brief A STRING containing an embedded NUL byte is rejected.
  *
  * An embedded NUL would cause the screen to display only the prefix while
@@ -713,6 +772,8 @@ int main(void) {
         cmocka_unit_test(test_raw_bytes_must_be_invalid),
         cmocka_unit_test(test_raw_bytes_if_not_in_match),
         cmocka_unit_test(test_raw_bytes_if_not_in_no_match),
+        cmocka_unit_test(test_raw_bytes_max_constant_displayed),
+        cmocka_unit_test(test_raw_bytes_prefix_constraint_no_match),
 
         // STRING tests
         cmocka_unit_test(test_raw_string),

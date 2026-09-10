@@ -8,6 +8,8 @@
 #include "typed_data.h"
 #include "path.h"
 #include "ui_logic.h"
+#include "shared_context.h"  // tmpCtx
+#include "common_utils.h"    // allzeroes
 #include "filtering.h"
 #include "os_pki.h"
 #include "trusted_name.h"
@@ -38,7 +40,7 @@
  * @param[in] discarded if the filter targets a field that does not exist (within an empty array)
  * @param[out] path_crc pointer to the CRC of the filter path
  */
-static bool hash_filtering_path(cx_hash_t *hash_ctx, bool discarded, uint32_t *path_crc) {
+static bool hash_filtering_path_internal(cx_hash_t *hash_ctx, bool discarded, uint32_t *path_crc) {
     const s_struct_712_field *field_ptr;
     const char *key;
     const char *path;
@@ -201,6 +203,15 @@ bool filtering_message_info(const uint8_t *payload, uint8_t length) {
         apdu_response_code = SWO_COMMAND_NOT_ALLOWED;
         return false;
     }
+    // The trusted signature binds the displayed name to the domain chain ID and
+    // contract, so they must be final: require the domain traversal to be complete
+    // (its hash finalized) and the message root not started yet.
+    if (allzeroes(tmpCtx.messageSigningContext712.domainHash,
+                  sizeof(tmpCtx.messageSigningContext712.domainHash))) {
+        PRINTF("EIP-712 message info with incomplete domain\n");
+        apdu_response_code = SWO_COMMAND_NOT_ALLOWED;
+        return false;
+    }
 
     // Parsing
     if ((offset + sizeof(name_len)) > length) {
@@ -243,8 +254,12 @@ bool filtering_message_info(const uint8_t *payload, uint8_t length) {
     // Handling
     ui_712_set_filters_count(filters_count);
     if (!N_storage.verbose_eip712) {
-        ui_712_set_title("Contract", 8);
-        ui_712_set_value(name, name_len);
+        if (!ui_712_set_title("Contract", 8)) {
+            return false;
+        }
+        if (!ui_712_set_value(name, name_len)) {
+            return false;
+        }
         return ui_712_redraw_generic_step();
     }
     return true;
@@ -376,7 +391,7 @@ bool filtering_calldata_spender(const uint8_t *payload,
     if (!sig_verif_start(&hash_ctx, FILT_MAGIC_CALLDATA_SPENDER)) {
         return false;
     }
-    if (!hash_filtering_path((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
+    if (!hash_filtering_path_internal((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
         return false;
     }
     hash_byte(index, (cx_hash_t *) &hash_ctx);
@@ -438,7 +453,7 @@ bool filtering_calldata_amount(const uint8_t *payload,
     if (!sig_verif_start(&hash_ctx, FILT_MAGIC_CALLDATA_AMOUNT)) {
         return false;
     }
-    if (!hash_filtering_path((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
+    if (!hash_filtering_path_internal((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
         return false;
     }
     hash_byte(index, (cx_hash_t *) &hash_ctx);
@@ -500,7 +515,7 @@ bool filtering_calldata_selector(const uint8_t *payload,
     if (!sig_verif_start(&hash_ctx, FILT_MAGIC_CALLDATA_SELECTOR)) {
         return false;
     }
-    if (!hash_filtering_path((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
+    if (!hash_filtering_path_internal((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
         return false;
     }
     hash_byte(index, (cx_hash_t *) &hash_ctx);
@@ -562,7 +577,7 @@ bool filtering_calldata_chain_id(const uint8_t *payload,
     if (!sig_verif_start(&hash_ctx, FILT_MAGIC_CALLDATA_CHAIN_ID)) {
         return false;
     }
-    if (!hash_filtering_path((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
+    if (!hash_filtering_path_internal((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
         return false;
     }
     hash_byte(index, (cx_hash_t *) &hash_ctx);
@@ -624,7 +639,7 @@ bool filtering_calldata_callee(const uint8_t *payload,
     if (!sig_verif_start(&hash_ctx, FILT_MAGIC_CALLDATA_CALLEE)) {
         return false;
     }
-    if (!hash_filtering_path((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
+    if (!hash_filtering_path_internal((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
         return false;
     }
     hash_byte(index, (cx_hash_t *) &hash_ctx);
@@ -686,7 +701,7 @@ bool filtering_calldata_value(const uint8_t *payload,
     if (!sig_verif_start(&hash_ctx, FILT_MAGIC_CALLDATA_VALUE)) {
         return false;
     }
-    if (!hash_filtering_path((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
+    if (!hash_filtering_path_internal((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
         return false;
     }
     hash_byte(index, (cx_hash_t *) &hash_ctx);
@@ -962,7 +977,7 @@ bool filtering_trusted_name(const uint8_t *payload,
     if (!sig_verif_start(&hash_ctx, FILT_MAGIC_TRUSTED_NAME)) {
         return false;
     }
-    if (!hash_filtering_path((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
+    if (!hash_filtering_path_internal((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
         return false;
     }
     hash_nbytes((uint8_t *) name, sizeof(char) * name_len, (cx_hash_t *) &hash_ctx);
@@ -978,7 +993,9 @@ bool filtering_trusted_name(const uint8_t *payload,
         return false;
     }
     if (name_len > 0) {  // don't substitute for an empty name
-        ui_712_set_title(name, name_len);
+        if (!ui_712_set_title(name, name_len)) {
+            return false;
+        }
     }
     ui_712_flag_field(true, name_len > 0, false, false, true, false);
     ui_712_set_trusted_name_requirements(type_count, types, source_count, sources);
@@ -1032,7 +1049,7 @@ bool filtering_date_time(const uint8_t *payload,
     if (!sig_verif_start(&hash_ctx, FILT_MAGIC_DATETIME)) {
         return false;
     }
-    if (!hash_filtering_path((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
+    if (!hash_filtering_path_internal((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
         return false;
     }
     hash_nbytes((uint8_t *) name, sizeof(char) * name_len, (cx_hash_t *) &hash_ctx);
@@ -1046,7 +1063,9 @@ bool filtering_date_time(const uint8_t *payload,
         return false;
     }
     if (name_len > 0) {  // don't substitute for an empty name
-        ui_712_set_title(name, name_len);
+        if (!ui_712_set_title(name, name_len)) {
+            return false;
+        }
     }
     ui_712_flag_field(true, name_len > 0, false, true, false, false);
     return true;
@@ -1094,7 +1113,7 @@ bool filtering_amount_join_token(const uint8_t *payload,
     if (!sig_verif_start(&hash_ctx, FILT_MAGIC_AMOUNT_JOIN_TOKEN)) {
         return false;
     }
-    if (!hash_filtering_path((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
+    if (!hash_filtering_path_internal((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
         return false;
     }
     hash_byte(token_idx, (cx_hash_t *) &hash_ctx);
@@ -1168,7 +1187,7 @@ bool filtering_amount_join_value(const uint8_t *payload,
     if (!sig_verif_start(&hash_ctx, FILT_MAGIC_AMOUNT_JOIN_VALUE)) {
         return false;
     }
-    if (!hash_filtering_path((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
+    if (!hash_filtering_path_internal((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
         return false;
     }
     hash_nbytes((uint8_t *) name, sizeof(char) * name_len, (cx_hash_t *) &hash_ctx);
@@ -1180,8 +1199,17 @@ bool filtering_amount_join_value(const uint8_t *payload,
     // Handling
     if (discarded) return true;
     if (token_idx == TOKEN_IDX_ADDR_IN_DOMAIN) {
-        // Permit (ERC-2612)
-        int resolved_idx = get_asset_index_by_addr(eip712_context->contract_addr);
+        // Permit (ERC-2612): resolving the verifyingContract to a token slot.
+        // Bound to the domain's chainId, so a domain that carries none (all
+        // real chain IDs are > 0) has nothing to bind the metadata to and is
+        // refused rather than resolved against some other chain's token.
+        if (eip712_context->chain_id == 0) {
+            PRINTF("ERROR: no chainId in the domain to bind the token metadata to!\n");
+            return false;
+        }
+        int resolved_idx = get_asset_index_by_type_and_addr(ASSET_TYPE_ERC20,
+                                                            eip712_context->contract_addr,
+                                                            eip712_context->chain_id);
 
         if (resolved_idx == -1) {
             PRINTF("ERROR: Could not find asset info for verifyingContract address!\n");
@@ -1249,7 +1277,7 @@ bool filtering_raw_field(const uint8_t *payload,
     if (!sig_verif_start(&hash_ctx, FILT_MAGIC_RAW_FIELD)) {
         return false;
     }
-    if (!hash_filtering_path((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
+    if (!hash_filtering_path_internal((cx_hash_t *) &hash_ctx, discarded, path_crc)) {
         return false;
     }
     hash_nbytes((uint8_t *) name, sizeof(char) * name_len, (cx_hash_t *) &hash_ctx);
@@ -1260,9 +1288,27 @@ bool filtering_raw_field(const uint8_t *payload,
     if (!discarded) {
         // Handling
         if (name_len > 0) {  // don't substitute for an empty name
-            ui_712_set_title(name, name_len);
+            if (!ui_712_set_title(name, name_len)) {
+                return false;
+            }
         }
         ui_712_flag_field(true, name_len > 0, false, false, false, false);
     }
     return true;
+}
+
+/**
+ * Compute the CRC of the path the current field is at.
+ *
+ * @param[out] path_crc pointer to the CRC of the filter path
+ * @return whether it was successful or not
+ */
+bool filtering_compute_current_path_crc(uint32_t *path_crc) {
+    cx_sha256_t hash_ctx;
+
+    if (!sig_verif_start(&hash_ctx, 0)) {
+        return false;
+    }
+    // reuse the path hashing; the magic byte does not matter for a CRC
+    return hash_filtering_path_internal((cx_hash_t *) &hash_ctx, false, path_crc);
 }

@@ -67,6 +67,20 @@ void eth_plugin_prepare_query_contract_id(ethQueryContractID_t *query_contract_i
     query_contract_id->versionLength = version_length;
 }
 
+// Resolve the slot recorded during finalize (1-based, 0 = no match)
+static union extraInfo_t *get_plugin_asset_slot(uint8_t slot) {
+    uint8_t index;
+
+    if (slot == 0) {
+        return NULL;
+    }
+    index = slot - 1;
+    if ((index >= MAX_ASSETS) || !tmpCtx.transactionContext.assetSet[index]) {
+        return NULL;
+    }
+    return &tmpCtx.transactionContext.extraInfo[index];
+}
+
 void eth_plugin_prepare_query_contract_ui(ethQueryContractUI_t *query_contract_ui,
                                           uint8_t screen_index,
                                           char *title,
@@ -77,19 +91,13 @@ void eth_plugin_prepare_query_contract_ui(ethQueryContractUI_t *query_contract_u
 
     explicit_bzero((uint8_t *) query_contract_ui, sizeof(ethQueryContractUI_t));
 
-    // If no extra information was found, set the pointer to NULL
-    if (NO_EXTRA_INFO(tmpCtx, 0)) {
-        query_contract_ui->item1 = NULL;
-    } else {
-        query_contract_ui->item1 = &tmpCtx.transactionContext.extraInfo[0];
-    }
-
-    // If no extra information was found, set the pointer to NULL
-    if (NO_EXTRA_INFO(tmpCtx, 1)) {
-        query_contract_ui->item2 = NULL;
-    } else {
-        query_contract_ui->item2 = &tmpCtx.transactionContext.extraInfo[1];
-    }
+    // Hand the UI the slots that this transaction's tokenLookup1/tokenLookup2
+    // actually matched. Exposing the fixed extraInfo[0]/[1] positions instead
+    // let a host preload metadata for one collection into slot 0 and have it
+    // rendered while the user approved a call to a different contract, since
+    // the NFT plugins render item1->nft directly (CWE-345).
+    query_contract_ui->item1 = get_plugin_asset_slot(dataContext.tokenContext.pluginAssetSlot1);
+    query_contract_ui->item2 = get_plugin_asset_slot(dataContext.tokenContext.pluginAssetSlot2);
 
     query_contract_ui->screenIndex = screen_index;
     chain_id = get_tx_chain_id();

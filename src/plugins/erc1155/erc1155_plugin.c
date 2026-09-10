@@ -4,6 +4,7 @@
 #include "plugin_utils.h"
 #include "eth_plugin_internal.h"
 #include "eth_plugin_handler.h"
+#include "manage_asset_info.h"
 
 static const uint8_t ERC1155_APPROVE_FOR_ALL_SELECTOR[SELECTOR_SIZE] = {0xa2, 0x2c, 0xb4, 0x65};
 static const uint8_t ERC1155_SAFE_TRANSFER_SELECTOR[SELECTOR_SIZE] = {0xf2, 0x42, 0x43, 0x2a};
@@ -19,8 +20,11 @@ void handle_init_contract_1155(ethPluginInitContract_t *msg) {
     erc1155_context_t *context = (erc1155_context_t *) msg->pluginContext;
     explicit_bzero(context, sizeof(*context));
 
-    if (NO_NFT_METADATA) {
-        PRINTF("No NFT metadata when trying to sign!\n");
+    // Require metadata for the contract actually being called, bound to the
+    // transaction's chain as soon as that is resolvable (see
+    // has_asset_info_for_current_tx).
+    if (!has_asset_info_for_current_tx(ASSET_TYPE_NFT, msg->txContent->destination)) {
+        PRINTF("No NFT metadata for the called contract when trying to sign!\n");
         msg->result = ETH_PLUGIN_RESULT_ERROR;
         return;
     }
@@ -58,22 +62,18 @@ void handle_init_contract_1155(ethPluginInitContract_t *msg) {
 void handle_finalize_1155(ethPluginFinalize_t *msg) {
     erc1155_context_t *context = (erc1155_context_t *) msg->pluginContext;
 
-    if (context->selectorIndex != SAFE_BATCH_TRANSFER) {
-        msg->tokenLookup1 = msg->txContent->destination;
-    } else {
-        msg->tokenLookup1 = NULL;
-    }
-
+    // Every selector renders the collection metadata, so all request the lookup
+    msg->tokenLookup1 = msg->txContent->destination;
     msg->tokenLookup2 = NULL;
     switch (context->selectorIndex) {
         case SAFE_TRANSFER:
-            msg->numScreens = 5;
+            // NFT Owner, To, Collection Name, NFT Address, NFT ID, Quantity
+            msg->numScreens = 6;
             break;
         case SAFE_BATCH_TRANSFER:
-            // To, Collection Name, NFT Address, Total Quantity
-            // + 2 screens per displayed pair (ID + Quantity)
-            // + 1 warning screen if truncated.
-            msg->numScreens = 4 + 2 * context->batch_displayed;
+            // Owner, To, Collection, Address, Total + 2 per pair (ID+Qty),
+            // +1 truncation warning
+            msg->numScreens = 5 + 2 * context->batch_displayed;
             if (context->batch_truncated) {
                 msg->numScreens += 1;
             }

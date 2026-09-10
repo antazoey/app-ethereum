@@ -74,7 +74,9 @@ static void ui_712_start_review(e_eip712_filtering_mode filtering_mode,
  */
 uint16_t ui_sign_712(e_eip712_filtering_mode filtering_mode) {
     // Initialize the pairs list
-    ui_712_push_pairs();
+    if (!ui_712_push_pairs()) {
+        return SWO_INSUFFICIENT_MEMORY;
+    }
 
     if (filtering_mode == EIP712_FILTERING_BASIC) {
 #ifdef HAVE_GATING_SUPPORT

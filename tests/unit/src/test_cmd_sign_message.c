@@ -245,6 +245,15 @@ static void test_single_chunk_hex_uses_0x_prefix(void **state) {
     assert_string_equal(g_ui_191_display, "0x010203");
 }
 
+static void test_single_chunk_ascii_with_space_stays_ascii(void **state) {
+    (void) state;
+    uint8_t data[64];
+    size_t len = build_first_apdu(data, sizeof(data), 11, (uint8_t *) "hello world", 11);
+    uint16_t sw = handle_sign_personal_message(P1_FIRST, data, (uint8_t) len);
+    assert_int_equal(sw, SWO_NO_RESPONSE);
+    assert_string_equal(g_ui_191_display, "hello world");
+}
+
 static void test_multichunk_completes_on_last_chunk(void **state) {
     (void) state;
     // FIRST sends 3 bytes, MORE sends remaining 4. msg_length = 7.
@@ -368,6 +377,7 @@ int main(void) {
         cmocka_unit_test_setup(test_first_keccak_init_failure_propagates, reset),
         cmocka_unit_test_setup(test_single_chunk_ascii_starts_ui, reset),
         cmocka_unit_test_setup(test_single_chunk_hex_uses_0x_prefix, reset),
+        cmocka_unit_test_setup(test_single_chunk_ascii_with_space_stays_ascii, reset),
         cmocka_unit_test_setup(test_multichunk_completes_on_last_chunk, reset),
         cmocka_unit_test_setup(test_chunk_overflow_rejected, reset),
         cmocka_unit_test_setup(test_final_finalize_failure_resets_state, reset),

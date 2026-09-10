@@ -177,3 +177,13 @@ bool mem_utils_calloc(void **buffer, uint16_t size, bool permanent, const char *
 const uint8_t *get_current_tx_amount(void) {
     return NULL;
 }
+
+bool tx_ctx_is_root(void) {
+    return true;
+}
+
+void gcs_set_root_value_shown(void) {
+}
+
+void gcs_set_root_from_shown(void) {
+}

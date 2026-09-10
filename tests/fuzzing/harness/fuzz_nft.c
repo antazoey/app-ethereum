@@ -1,4 +1,5 @@
 #include "fuzz_utils.h"
+#include "apdu_constants.h"
 
 int fuzzNFTInfo(const uint8_t *data, size_t size) {
     unsigned int tx;

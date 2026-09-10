@@ -263,3 +263,53 @@ target_link_libraries(test_field_validation PUBLIC
 )
 
 add_test(test_field_validation test_field_validation)
+
+# ETH2 staking deposit plugin test
+# Needs a real SHA-256 to check the SSZ deposit_data_root the plugin
+# recomputes, so it is only built when libcrypto is available.
+pkg_check_modules(LIBCRYPTO libcrypto)
+if(NOT LIBCRYPTO_FOUND)
+  message(WARNING "libcrypto not found - skipping test_eth2_plugin")
+else()
+add_executable(test_eth2_plugin
+  ${SRC_DIR}/test_eth2_plugin.c
+  ${APP_DIR}/plugins/eth2/eth2_plugin.c
+  ${APP_DIR}/uint256.c
+  ${APP_DIR}/uint128.c
+  ${APP_DIR}/utils.c
+  ${PLUGIN_DIR}/common_utils.c
+  ${MOCK_DIR}/mock.c
+  ${BOLOS_SDK}/lib_standard_app/format.c
+  ${BOLOS_SDK}/lib_standard_app/read.c
+  ${BOLOS_SDK}/lib_standard_app/write.c
+)
+
+target_include_directories(test_eth2_plugin PRIVATE
+  ${APP_DIR}/plugins
+  ${APP_DIR}/plugins/eth2
+  ${APP_DIR}/features/get_eth2_public_key
+  ${LIBCRYPTO_INCLUDE_DIRS}
+)
+
+target_compile_definitions(test_eth2_plugin PRIVATE
+  HAVE_ETH2
+  HAVE_ECDSA
+  HAVE_HASH
+  HAVE_SHA256
+  HAVE_SHA3
+  HAVE_ECC
+  HAVE_MATH
+)
+
+target_link_libraries(test_eth2_plugin PUBLIC
+                      cmocka
+                      gcov
+                      ${LIBBSD_LIBRARIES}
+                      ${LIBCRYPTO_LIBRARIES}
+                      -Wl,--wrap=get_eth2_public_key
+                      -Wl,--wrap=cx_hash_sha256
+                      -Wl,--wrap=amountToString
+)
+
+add_test(test_eth2_plugin test_eth2_plugin)
+endif()

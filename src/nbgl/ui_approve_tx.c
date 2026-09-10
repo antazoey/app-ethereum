@@ -119,12 +119,10 @@ static bool setTagValuePairs(bool displayNetwork, bool fromPlugin) {
 
     // Setup data to display
     if (fromPlugin) {
-        if (pluginType != PLUGIN_TYPE_EXTERNAL) {
-            if (strings.common.fromAddress[0] != 0) {
-                g_pairs[nbPairs].item = "From";
-                g_pairs[nbPairs].value = strings.common.fromAddress;
-                nbPairs++;
-            }
+        if (strings.common.fromAddress[0] != 0) {
+            g_pairs[nbPairs].item = "From";
+            g_pairs[nbPairs].value = strings.common.fromAddress;
+            nbPairs++;
         }
         for (pairIndex = 0; pairIndex < dataContext.tokenContext.pluginUiMaxItems; pairIndex++) {
             // for the next dataContext.tokenContext.pluginUiMaxItems items, get tag/value from
@@ -259,7 +257,7 @@ static size_t getNbPairs(bool displayNetwork, bool fromPlugin) {
     // Setup data to display
     if (fromPlugin) {
         // Count the From address
-        if ((pluginType != PLUGIN_TYPE_EXTERNAL) && (strings.common.fromAddress[0] != 0)) {
+        if (strings.common.fromAddress[0] != 0) {
             nbPairs++;
         }
         // Count the plugin items
@@ -322,13 +320,9 @@ static bool ux_init(bool fromPlugin, uint8_t title_len, uint8_t finish_len) {
     }
     // Compute the number of g_pairs to display
     nbPairs = getNbPairs(displayNetwork, fromPlugin);
-    if (nbPairs > UINT8_MAX) {
-        PRINTF("Error: Too many review pairs: %u\n", (unsigned) nbPairs);
-        goto error;
-    }
 
     // Initialize the buffers
-    if (!ui_pairs_init((uint8_t) nbPairs)) {
+    if (!ui_pairs_init(nbPairs)) {
         // Initialization failed, cleanup and return
         goto error;
     }

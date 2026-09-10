@@ -86,6 +86,25 @@ const s_struct_712 *get_structn(const char *name, uint8_t length) {
 }
 
 /**
+ * Validate a schema name (struct, type or field name).
+ *
+ * Names are embedded verbatim into the JSON-like schema hash preimage, so
+ * characters that can alter the JSON structure or its parsing would let a host
+ * craft distinct schemas whose reconstructed JSON collides. EIP-712 itself does
+ * not constrain the charset; this is a Ledger-side hardening choice.
+ */
+static bool is_valid_identifier(const uint8_t *name, uint8_t length) {
+    for (uint8_t i = 0; i < length; ++i) {
+        // '"' and '\' break the schema-hash JSON reconstruction; '.' and NUL
+        // break the dot-joined filter path identity
+        if ((name[i] == '"') || (name[i] == '\\') || (name[i] == '.') || (name[i] == '\0')) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/**
  * Set struct name
  *
  * @param[in] length name length
@@ -95,7 +114,7 @@ const s_struct_712 *get_structn(const char *name, uint8_t length) {
 bool set_struct_name(uint8_t length, const uint8_t *name) {
     s_struct_712 *new_struct;
 
-    if (name == NULL) {
+    if ((name == NULL) || !is_valid_identifier(name, length)) {
         apdu_response_code = SWO_INCORRECT_DATA;
         return false;
     }
@@ -167,6 +186,10 @@ static bool set_struct_field_custom_typename(s_struct_712_field *field,
     // copy name
     if ((*data_idx + typename_len) > length)  // check buffer bound
     {
+        apdu_response_code = SWO_INCORRECT_DATA;
+        return false;
+    }
+    if (!is_valid_identifier(&data[*data_idx], typename_len)) {
         apdu_response_code = SWO_INCORRECT_DATA;
         return false;
     }
@@ -278,6 +301,10 @@ static bool set_struct_field_keyname(s_struct_712_field *field,
         apdu_response_code = SWO_INCORRECT_DATA;
         return false;
     }
+    if (!is_valid_identifier(&data[*data_idx], keyname_len)) {
+        apdu_response_code = SWO_INCORRECT_DATA;
+        return false;
+    }
 
     if ((field->key_name = APP_MEM_ALLOC(keyname_len + 1)) == NULL) {
         apdu_response_code = SWO_INSUFFICIENT_MEMORY;
@@ -338,6 +365,37 @@ bool set_struct_field(uint8_t length, const uint8_t *data) {
         if (set_struct_field_custom_typename(new_field, data, &data_idx, length) == false) {
             goto cleanup;
         }
+    }
+
+    // Validate the type/size combination: a fixed-size-bytes without a size would
+    // serialize as plain "bytes" (identical to dynamic bytes) in the schema/type
+    // hashes while being hashed as a static value, so a host could make the review
+    // show keccak256(X) while the signature commits to X.
+    switch (new_field->type) {
+        case TYPE_SOL_INT:
+        case TYPE_SOL_UINT:
+        case TYPE_SOL_BYTES_FIX:
+            if (!new_field->type_has_size || (new_field->type_size == 0) ||
+                (new_field->type_size > 32)) {
+                apdu_response_code = SWO_INCORRECT_DATA;
+                goto cleanup;
+            }
+            break;
+        case TYPE_SOL_ADDRESS:
+        case TYPE_SOL_BOOL:
+        case TYPE_SOL_STRING:
+        case TYPE_SOL_BYTES_DYN:
+            if (new_field->type_has_size) {
+                apdu_response_code = SWO_INCORRECT_DATA;
+                goto cleanup;
+            }
+            break;
+        case TYPE_CUSTOM:
+            // typename handled above, mutually exclusive with a type size
+            break;
+        default:
+            apdu_response_code = SWO_INCORRECT_DATA;
+            goto cleanup;
     }
     if (new_field->type_is_array) {
         if (set_struct_field_array(new_field, data, &data_idx, length) == false) {

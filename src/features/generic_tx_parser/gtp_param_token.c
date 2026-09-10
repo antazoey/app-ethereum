@@ -45,7 +45,16 @@ DEFINE_TLV_PARSER(PARAM_TOKEN_TAGS, NULL, param_token_tlv_parser)
 
 bool handle_param_token_struct(const buffer_t *buf, s_param_token_context *context) {
     TLV_reception_t received_tags;
-    return param_token_tlv_parser(buf, context, &received_tags);
+    if (!param_token_tlv_parser(buf, context, &received_tags)) {
+        return false;
+    }
+    // Enforce the sub-structure's mandatory tags: an empty or partial PARAM
+    // payload would otherwise parse fine and never appear in the review
+    if (!TLV_CHECK_RECEIVED_TAGS(received_tags, TAG_VERSION, TAG_ADDRESS)) {
+        PRINTF("Error: missing mandatory tag(s) in gtp_param_token\n");
+        return false;
+    }
+    return true;
 }
 
 static bool match_native(const uint8_t *addr, const s_param_token *param) {
@@ -77,7 +86,8 @@ bool format_param_token(const s_param_token *param, const char *name) {
             buf_shrink_expand(collec.value[i].ptr, collec.value[i].length, addr, sizeof(addr));
             if (match_native(addr, param)) {
                 ticker = get_displayable_ticker(&chain_id, chainConfig, true);
-            } else if ((token_def = (const tokenDefinition_t *) get_asset_info_by_addr(addr))) {
+            } else if ((token_def = (const tokenDefinition_t *)
+                            get_asset_info_by_type_and_addr(ASSET_TYPE_ERC20, addr, chain_id))) {
                 ticker = token_def->ticker;
             }
             if (ticker == NULL) {
