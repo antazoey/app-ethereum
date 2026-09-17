@@ -103,8 +103,13 @@ bool copy_transaction_parameters(create_transaction_parameters_t* sign_transacti
     PRINTF("Expecting fees %s\n", stack_data.maxFee);
 
     if (swap_mode == SWAP_MODE_CROSSCHAIN_PENDING_CHECK &&
-        strcmp(ticker, context.swapped_asset_info.ticker) != 0) {
-        // Special case: crosschain swap of non native assets (tokens)
+        (context.swapped_asset_info.decimals != context.fees_asset_info.decimals ||
+         strcmp(ticker, context.swapped_asset_info.ticker) != 0)) {
+        // Special case: crosschain swap of non native assets (tokens). Such an asset declares a
+        // ticker or decimals the network's native currency cannot have: parse_swap_config() pins
+        // the native decimals to WEI_TO_ETHER, which is also what the signature path formats the
+        // transaction value with. The token's amount lives in the calldata, so the expected
+        // on-chain value is zero.
         uint8_t zero_amount = 0;
         if (!amountToString(&zero_amount,
                             1,
