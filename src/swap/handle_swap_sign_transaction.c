@@ -14,6 +14,8 @@ uint8_t* G_swap_crosschain_hash = NULL;
 uint64_t G_swap_expected_chain_id;
 uint8_t G_swap_expected_token_address[ADDRESS_LENGTH];
 bool G_swap_has_expected_token_address;
+// See declaration in shared_context.h
+swap_value_check_t G_swap_expected_value_check;
 
 typedef enum extra_id_type_e {
     EXTRA_ID_TYPE_NATIVE,
@@ -102,14 +104,20 @@ bool copy_transaction_parameters(create_transaction_parameters_t* sign_transacti
     }
     PRINTF("Expecting fees %s\n", stack_data.maxFee);
 
+    swap_value_check_t expected_value_check = SWAP_VALUE_CHECK_AMOUNT;
     if (swap_mode == SWAP_MODE_CROSSCHAIN_PENDING_CHECK &&
-        (context.swapped_asset_info.decimals != context.fees_asset_info.decimals ||
+        (context.has_token_address ||
+         context.swapped_asset_info.decimals != context.fees_asset_info.decimals ||
          strcmp(ticker, context.swapped_asset_info.ticker) != 0)) {
-        // Special case: crosschain swap of non native assets (tokens). Such an asset declares a
-        // ticker or decimals the network's native currency cannot have: parse_swap_config() pins
-        // the native decimals to WEI_TO_ETHER, which is also what the signature path formats the
-        // transaction value with. The token's amount lives in the calldata, so the expected
-        // on-chain value is zero.
+        // The swapped asset is a token, distinct from the network's native currency: the config
+        // announced its contract address or, for a config predating that optional field, declared
+        // decimals or a ticker that the native currency cannot have. Decimals are conclusive
+        // because parse_swap_config() pins the fee asset's, hence the network's, to WEI_TO_ETHER,
+        // which is also what the signature path formats the transaction value with. The token's
+        // real amount lives inside the calldata, not in the transaction's value field (the
+        // calldata itself is authenticated separately via G_swap_crosschain_hash), so the expected
+        // on-chain value here is always zero, and a non-zero value must be rejected.
+        expected_value_check = SWAP_VALUE_CHECK_ZERO;
         uint8_t zero_amount = 0;
         if (!amountToString(&zero_amount,
                             1,
@@ -120,6 +128,15 @@ bool copy_transaction_parameters(create_transaction_parameters_t* sign_transacti
             return false;
         }
     } else {
+        // No signal identified a token (or this isn't a crosschain swap): the native currency
+        // itself is being spent, so the expected on-chain value is the real swapped amount.
+        //
+        // A token whose config matches the native currency on all three signals at once is
+        // indistinguishable from it and lands here too. It is then held to the native rule: its
+        // legitimate zero-value form is refused, but a value equal to the validated amount is
+        // still accepted, on top of the token the calldata spends. Only the contract address
+        // resolves that, so such an asset must not be listed for swap until the config carries
+        // it.
         if (!amountToString(sign_transaction_params->amount,
                             sign_transaction_params->amount_length,
                             context.swapped_asset_info.decimals,
@@ -142,6 +159,7 @@ bool copy_transaction_parameters(create_transaction_parameters_t* sign_transacti
     if (context.has_token_address) {
         memcpy(G_swap_expected_token_address, context.token_address, ADDRESS_LENGTH);
     }
+    G_swap_expected_value_check = expected_value_check;
 
     app_mem_init();
     if ((G_swap_crosschain_hash = APP_MEM_ALLOC(CX_SHA256_SIZE)) == NULL) {

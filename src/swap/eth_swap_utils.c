@@ -283,6 +283,53 @@ bool swap_check_amount(const char *amount) {
 }
 
 /**
+ * Verify that the transaction's value field holds what was validated in Exchange
+ *
+ * What that is depends on the asset being swapped, as decided by copy_transaction_parameters():
+ * the validated amount when the native currency is spent, zero when a token is spent (see
+ * swap_value_check_t). Neither form tolerates anything else: this value is the only part of the
+ * spend the user validated in Exchange that the app can bind on its own.
+ *
+ * The zero cases are checked on the raw value rather than on its formatted form: the expected
+ * "0 <native ticker>" string is built from the swap config's fee asset info while the observed one
+ * is built from the network the transaction declares, so comparing them would make the signature
+ * depend on those two tickers spelling the native currency identically. The chain ID is bound
+ * separately anyway, in finalize_parsing_helper().
+ *
+ * @param formatted_value Transaction value, formatted the way Exchange formats amounts
+ * @param raw_value Transaction value, as parsed from the transaction
+ * @param raw_value_len Length of raw_value in bytes
+ * @return true if the value matches, false otherwise (exits app on failure)
+ */
+bool swap_check_value(const char *formatted_value,
+                      const uint8_t *raw_value,
+                      uint8_t raw_value_len) {
+    if ((formatted_value == NULL) || (raw_value == NULL)) {
+        return false;
+    }
+    bool value_is_zero = (allzeroes(raw_value, raw_value_len) == 1);
+
+    switch (G_swap_expected_value_check) {
+        case SWAP_VALUE_CHECK_ZERO:
+            if (!value_is_zero) {
+                PRINTF("Error: non-zero value for a token swap\n");
+                send_swap_error_with_string(APDU_RESPONSE_MODE_CHECK_FAILED,
+                                            SWAP_EC_ERROR_WRONG_AMOUNT,
+                                            APP_CODE_DEFAULT,
+                                            "expected a zero value, got %s",
+                                            formatted_value);
+                // unreachable
+                os_sched_exit(0);
+                return false;
+            }
+            return true;
+        case SWAP_VALUE_CHECK_AMOUNT:
+        default:
+            return swap_check_amount(formatted_value);
+    }
+}
+
+/**
  * Verify that the fee matches the previously validated one
  *
  * @param fee Fee to verify

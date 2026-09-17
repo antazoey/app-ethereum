@@ -237,6 +237,18 @@ extern uint64_t G_swap_expected_chain_id;
 extern uint8_t G_swap_expected_token_address[ADDRESS_LENGTH];
 extern bool G_swap_has_expected_token_address;
 
+// What the transaction's value field must hold, as decided by copy_transaction_parameters() from
+// the identity of the asset being swapped. Both forms are strict: nothing else is signed.
+typedef enum swap_value_check_e {
+    // The native currency is spent: the value must be the amount validated in Exchange
+    SWAP_VALUE_CHECK_AMOUNT = 0,
+    // A token is spent: its amount lives in the calldata, which a crosschain swap checks against
+    // the partner's promise (G_swap_crosschain_hash), so the value itself must be zero
+    SWAP_VALUE_CHECK_ZERO,
+} swap_value_check_t;
+
+extern swap_value_check_t G_swap_expected_value_check;
+
 typedef enum {
     PLUGIN_TYPE_NONE = 0,
     // External plugin, set by set_external_plugin
