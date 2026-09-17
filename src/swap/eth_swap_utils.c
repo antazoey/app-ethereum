@@ -290,11 +290,13 @@ bool swap_check_amount(const char *amount) {
  * swap_value_check_t). Neither form tolerates anything else: this value is the only part of the
  * spend the user validated in Exchange that the app can bind on its own.
  *
- * The zero cases are checked on the raw value rather than on its formatted form: the expected
- * "0 <native ticker>" string is built from the swap config's fee asset info while the observed one
- * is built from the network the transaction declares, so comparing them would make the signature
- * depend on those two tickers spelling the native currency identically. The chain ID is bound
- * separately anyway, in finalize_parsing_helper().
+ * Both forms are checked on the raw value rather than on its formatted form. For the zero case,
+ * the expected "0 <native ticker>" string is built from the swap config's fee asset info while the
+ * observed one is built from the network the transaction declares, so comparing them would make
+ * the signature depend on those two tickers spelling the native currency identically. For the
+ * amount case, the formatted forms of two amounts on different scales collide outright: an asset
+ * declaring 6 decimals makes 1 token and 1 native unit both read "1 <ticker>". The chain ID is
+ * bound separately anyway, in finalize_parsing_helper().
  *
  * @param formatted_value Transaction value, formatted the way Exchange formats amounts
  * @param raw_value Transaction value, as parsed from the transaction
@@ -304,10 +306,28 @@ bool swap_check_amount(const char *amount) {
 bool swap_check_value(const char *formatted_value,
                       const uint8_t *raw_value,
                       uint8_t raw_value_len) {
+    uint8_t observed_value[INT256_LENGTH];
+
     if ((formatted_value == NULL) || (raw_value == NULL)) {
         return false;
     }
+    if (raw_value_len > sizeof(observed_value)) {
+        // Cannot happen: the RLP parser caps the value at a word. Fail closed rather than skip
+        // the check, since the only caller does not read this function's return value.
+        PRINTF("Error: transaction value longer than a word\n");
+        send_swap_error_simple(APDU_RESPONSE_MODE_CHECK_FAILED,
+                               SWAP_EC_ERROR_WRONG_AMOUNT,
+                               APP_CODE_DEFAULT);
+        // unreachable
+        os_sched_exit(0);
+        return false;
+    }
     bool value_is_zero = (allzeroes(raw_value, raw_value_len) == 1);
+
+    // Right-align the value in a full word, the way G_swap_expected_value is staged, so the two
+    // can be compared whatever minimal length each side was encoded with.
+    explicit_bzero(observed_value, sizeof(observed_value));
+    memcpy(observed_value + sizeof(observed_value) - raw_value_len, raw_value, raw_value_len);
 
     switch (G_swap_expected_value_check) {
         case SWAP_VALUE_CHECK_ZERO:
@@ -325,6 +345,22 @@ bool swap_check_value(const char *formatted_value,
             return true;
         case SWAP_VALUE_CHECK_AMOUNT:
         default:
+            if (memcmp(observed_value, G_swap_expected_value, sizeof(observed_value)) != 0) {
+                PRINTF("Error: value differs from the validated amount\n");
+                // Both sides are printed because they can read identically: that two equal
+                // strings can stand for different amounts is what this check exists for
+                send_swap_error_with_string(APDU_RESPONSE_MODE_CHECK_FAILED,
+                                            SWAP_EC_ERROR_WRONG_AMOUNT,
+                                            APP_CODE_DEFAULT,
+                                            "raw value mismatch: expected %s, got %s",
+                                            strings.common.fullAmount,
+                                            formatted_value);
+                // unreachable
+                os_sched_exit(0);
+                return false;
+            }
+            // The raw bytes match; the formatted comparison additionally binds the ticker the two
+            // sides spell the asset with.
             return swap_check_amount(formatted_value);
     }
 }

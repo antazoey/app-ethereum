@@ -249,6 +249,13 @@ typedef enum swap_value_check_e {
 
 extern swap_value_check_t G_swap_expected_value_check;
 
+// The amount Exchange validated, as the raw big-endian bytes it provided, right-aligned in a
+// full word. SWAP_VALUE_CHECK_AMOUNT compares the transaction's value against these instead of
+// against its formatted form: two amounts on different scales can share the very same formatted
+// string (1 USDC at 6 decimals and 1 native unit at WEI_TO_ETHER both read "1 USDC"), so the
+// string alone does not bind the value.
+extern uint8_t G_swap_expected_value[INT256_LENGTH];
+
 typedef enum {
     PLUGIN_TYPE_NONE = 0,
     // External plugin, set by set_external_plugin

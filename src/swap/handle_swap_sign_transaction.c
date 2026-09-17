@@ -16,6 +16,7 @@ uint8_t G_swap_expected_token_address[ADDRESS_LENGTH];
 bool G_swap_has_expected_token_address;
 // See declaration in shared_context.h
 swap_value_check_t G_swap_expected_value_check;
+uint8_t G_swap_expected_value[INT256_LENGTH];
 
 typedef enum extra_id_type_e {
     EXTRA_ID_TYPE_NATIVE,
@@ -30,11 +31,13 @@ bool copy_transaction_parameters(create_transaction_parameters_t* sign_transacti
     txStringProperties_t stack_data;
     uint8_t destination_address_extra_data[CX_SHA256_SIZE + 1];
     uint8_t swap_crosschain_hash[CX_SHA256_SIZE];
+    uint8_t expected_value[INT256_LENGTH];
     swap_mode_t swap_mode;
 
     explicit_bzero(&stack_data, sizeof(stack_data));
     explicit_bzero(destination_address_extra_data, sizeof(destination_address_extra_data));
     explicit_bzero(swap_crosschain_hash, sizeof(swap_crosschain_hash));
+    explicit_bzero(expected_value, sizeof(expected_value));
 
     // Set destination address
     strlcpy(stack_data.toAddress,
@@ -146,6 +149,12 @@ bool copy_transaction_parameters(create_transaction_parameters_t* sign_transacti
             return false;
         }
     }
+    // Stage the amount as the raw bytes Exchange provided, beside its formatted form: the value
+    // check binds these, and reading them here is what the stack copy exists for, since the input
+    // data may overlap the globals that os_explicit_zero_BSS_segment() is about to wipe.
+    memcpy(expected_value + sizeof(expected_value) - sign_transaction_params->amount_length,
+           sign_transaction_params->amount,
+           sign_transaction_params->amount_length);
     PRINTF("Expecting amount %s\n", stack_data.fullAmount);
 
     // Full reset the global variables
@@ -160,6 +169,7 @@ bool copy_transaction_parameters(create_transaction_parameters_t* sign_transacti
         memcpy(G_swap_expected_token_address, context.token_address, ADDRESS_LENGTH);
     }
     G_swap_expected_value_check = expected_value_check;
+    memcpy(G_swap_expected_value, expected_value, sizeof(G_swap_expected_value));
 
     app_mem_init();
     if ((G_swap_crosschain_hash = APP_MEM_ALLOC(CX_SHA256_SIZE)) == NULL) {
